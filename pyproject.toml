@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "decide"
+version = "0.1.0"
+description = "decide-400m: typed answers about a state in one encoder pass, calibrated, with a bound on the error rate of the decisions it makes"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [{name = "Manav Agarwal", email = "manav@hanaml.com"}]
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.24", "torch>=2.2"]
+
+[project.optional-dependencies]
+hf = ["transformers>=4.48"]
+dev = ["pytest>=7", "ruff>=0.5"]
+
+[project.scripts]
+decide-demo = "decide.demo:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"card/*" = ["E701", "E702", "E731", "E741"]
