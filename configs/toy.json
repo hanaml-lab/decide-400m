@@ -1,0 +1,13 @@
+{
+ "_comment": "The CPU toy (python -m decide.demo): a two-layer rotary encoder trained from scratch on CLINC150 questions.",
+ "d": 64,
+ "layers": 2,
+ "heads": 4,
+ "ff": 256,
+ "epochs": 4,
+ "batch_size": 64,
+ "lr": 0.002,
+ "threads": 4,
+ "alphas": [0.05, 0.1],
+ "delta": 0.1
+}
