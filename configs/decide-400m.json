@@ -1,0 +1,17 @@
+{
+ "_comment": "The settings of decide-400m's training run, for scripts/train.py. Weights are not published.",
+ "backbone": "answerdotai/ModernBERT-large",
+ "max_state_tokens": 7680,
+ "max_question_tokens": 64,
+ "max_option_tokens": 32,
+ "epochs": 2,
+ "batch_size": 32,
+ "lr": 3e-05,
+ "weight_decay": 0.01,
+ "warmup": 0.06,
+ "seed": 0,
+ "alphas": [0.05, 0.1],
+ "delta": 0.1,
+ "train": "data/train.jsonl",
+ "calibration": "data/calibration.jsonl"
+}
