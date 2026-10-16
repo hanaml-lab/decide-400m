@@ -1,0 +1,553 @@
+{
+ "sources": {
+  "clinc/all": {
+   "repo": "github.com/clinc/oos-eval (bundled)",
+   "file": "data/clinc150.json.gz",
+   "sha256": "9706e3295e07f69875a2715df917a8adf7605902ad49e7b3829ab72928ea6e98"
+  },
+  "ag_news/train": {
+   "repo": "fancyzhx/ag_news",
+   "commit": "eb185aade064a813bc0b7f42de02595523103ca4",
+   "file": "data/train-00000-of-00001.parquet",
+   "sha256": "fc508d6d9868594e3da960a8cfeb63ab5a4746598b93428c224397080c1f52ee"
+  },
+  "dbpedia/train": {
+   "repo": "fancyzhx/dbpedia_14",
+   "commit": "9abd46cf7fc8b4c64290f26993c540b92aa145ac",
+   "file": "dbpedia_14/train-00000-of-00001.parquet",
+   "sha256": "0640e4664a99cc94c47db1d7b2e01c14455d5bbecb8183ad1f93bde59f3f28ee"
+  },
+  "yahoo/train": {
+   "repo": "community-datasets/yahoo_answers_topics",
+   "commit": "6652a1e7c94f7260a0bfd0c9092dd48e2d536ea1",
+   "file": "yahoo_answers_topics/train-00000-of-00002.parquet",
+   "sha256": "0089bdde22f78e563c1cf21a5e87a15724845c08641154f40ca9baa8d069a42a"
+  },
+  "mnli/train": {
+   "repo": "nyu-mll/multi_nli",
+   "commit": "da70db2af9d09693783c3320c4249840212ee221",
+   "file": "data/train-00000-of-00001.parquet",
+   "sha256": "1c1de03640b168e410aabfca19e7cc2f3dfcd7f0e126e935674e56fb102c4529"
+  },
+  "boolq/train": {
+   "repo": "google/boolq",
+   "commit": "35b264d03638db9f4ce671b711558bf7ff0f80d5",
+   "file": "data/train-00000-of-00001.parquet",
+   "sha256": "4f028e992c0bd4df30b9f056f4946b64f5c23028034ff0ed5ea467d8538cc623"
+  },
+  "yelp/train": {
+   "repo": "Yelp/yelp_review_full",
+   "commit": "c1f9ee939b7d05667af864ee1cb066393154bf85",
+   "file": "yelp_review_full/train-00000-of-00001.parquet",
+   "sha256": "da3ca3dcc52b1e2e44195b53668610d645a59010a985dd45aa12e1109cd44601"
+  },
+  "ag_news/test": {
+   "repo": "fancyzhx/ag_news",
+   "commit": "eb185aade064a813bc0b7f42de02595523103ca4",
+   "file": "data/test-00000-of-00001.parquet",
+   "sha256": "71de87ec66bc5737752a2502204dfa6d7fe9856ade3ea444dc6317789a4f13fb"
+  },
+  "dbpedia/test": {
+   "repo": "fancyzhx/dbpedia_14",
+   "commit": "9abd46cf7fc8b4c64290f26993c540b92aa145ac",
+   "file": "dbpedia_14/test-00000-of-00001.parquet",
+   "sha256": "05fed41640e97f93ffd442757f6a84170348cf0c7500ecbda9e95ddcd928c631"
+  },
+  "yahoo/test": {
+   "repo": "community-datasets/yahoo_answers_topics",
+   "commit": "6652a1e7c94f7260a0bfd0c9092dd48e2d536ea1",
+   "file": "yahoo_answers_topics/test-00000-of-00001.parquet",
+   "sha256": "1ae212b4eccfc514668b9c9952f16aadf6d3b056a202cb897d30e3dd3671c690"
+  },
+  "mnli/test": {
+   "repo": "nyu-mll/multi_nli",
+   "commit": "da70db2af9d09693783c3320c4249840212ee221",
+   "file": "data/validation_matched-00000-of-00001.parquet",
+   "sha256": "350c26950b55f460b50d36c76aef87d64b49c78812d7abf7bf97e5fede10f186"
+  },
+  "boolq/test": {
+   "repo": "google/boolq",
+   "commit": "35b264d03638db9f4ce671b711558bf7ff0f80d5",
+   "file": "data/validation-00000-of-00001.parquet",
+   "sha256": "52355d11524b4b874a9b9dcc278feb10f672d52c4f4eff9872e695ede59820f8"
+  },
+  "yelp/test": {
+   "repo": "Yelp/yelp_review_full",
+   "commit": "c1f9ee939b7d05667af864ee1cb066393154bf85",
+   "file": "yelp_review_full/test-00000-of-00001.parquet",
+   "sha256": "bf06d5969bff93ecd4a6d4b330643761ce108b42e9b8a894cf82c9df02a08540"
+  },
+  "trec/test": {
+   "repo": "CogComp/trec",
+   "commit": "65752bf53af25bc935a0dce92fb5b6c930728450",
+   "file": "default/test/0000.parquet",
+   "sha256": "6aa889b0289e02760644caa22ac9aa833e79e34fb1f1ced69f745a078550c56e"
+  },
+  "trec/train": {
+   "repo": "CogComp/trec",
+   "commit": "65752bf53af25bc935a0dce92fb5b6c930728450",
+   "file": "default/train/0000.parquet",
+   "sha256": "5ffb07b1cbd45e47b4dd1dd113dadd19e44eb260721114c6147e0ce6c1e47590"
+  },
+  "banking77/test": {
+   "repo": "mteb/banking77",
+   "commit": "18072d2685ea682290f7b8924d94c62acc19c0b2",
+   "file": "data/test-00000-of-00001.parquet",
+   "sha256": "9575f636fdeae0c94a0f3f2d926ca8f9a2833b998cf94108936dfd5d72322bf9"
+  },
+  "newsgroups/test": {
+   "repo": "SetFit/20_newsgroups",
+   "commit": "f1b91292074e7cfb69be58b642d583ec262f30ed",
+   "file": "test.jsonl",
+   "sha256": "a0c1f20c01fa77f6b832fdb5e6218018660781e762f3e68ee3e6f279e7839bcc"
+  },
+  "rte/test": {
+   "repo": "nyu-mll/glue",
+   "commit": "bcdcba79d07bc864c1c254ccfcedcce55bcc9a8c",
+   "file": "rte/validation-00000-of-00001.parquet",
+   "sha256": "fb2aa2e04f551133ba663617a15ae133dc22b0f6a969bc0629b5ea6003ee9cf8"
+  },
+  "rte/train": {
+   "repo": "nyu-mll/glue",
+   "commit": "bcdcba79d07bc864c1c254ccfcedcce55bcc9a8c",
+   "file": "rte/train-00000-of-00001.parquet",
+   "sha256": "a6252ab17015d718f6de1effe0980f7b158df63e3d16207cd8bd396b608e5147"
+  },
+  "scitail/test": {
+   "repo": "allenai/scitail",
+   "commit": "0cc4353235b289165dfde1c7c5d1be983f99ce44",
+   "file": "snli_format/test-00000-of-00001.parquet",
+   "sha256": "9814bcb18de316ee02bb533626bee2ed8db03bed7b0bd6d0deb9d66536ded627"
+  },
+  "mrpc/test": {
+   "repo": "nyu-mll/glue",
+   "commit": "bcdcba79d07bc864c1c254ccfcedcce55bcc9a8c",
+   "file": "mrpc/test-00000-of-00001.parquet",
+   "sha256": "a623ed1cbdf445b11f8e249acbf649d7d3a5ee58c918554c40cbd8307e488693"
+  },
+  "mrpc/train": {
+   "repo": "nyu-mll/glue",
+   "commit": "bcdcba79d07bc864c1c254ccfcedcce55bcc9a8c",
+   "file": "mrpc/train-00000-of-00001.parquet",
+   "sha256": "61fd41301e0e244b0420c4350a170c8e7cf64740335fc875a4af2d79af0df0af"
+  },
+  "sst5/test": {
+   "repo": "SetFit/sst5",
+   "commit": "e51bdcd8cd3a30da231967c1a249ba59361279a3",
+   "file": "test.jsonl",
+   "sha256": "1384216112a34f3d70b6fa210762f3399bb080410c0456ac6e54a5cb413f04b2"
+  },
+  "stsb/test": {
+   "repo": "mteb/stsbenchmark-sts",
+   "commit": "96943a16ea6a35129e253c659081cb59daf81b30",
+   "file": "test.jsonl.gz",
+   "sha256": "524a75137d413dbfc40c3e84905f733714232647c3848521acb6bc375b834e1c"
+  },
+  "tweet_sentiment/test": {
+   "repo": "cardiffnlp/tweet_eval",
+   "commit": "b3a375baf0f409c77e6bc7aa35102b7b3534f8be",
+   "file": "sentiment/test-00000-of-00001.parquet",
+   "sha256": "f73aea52d43879223019e733b944780f7e9203ee32459ea006f554011379fcdf"
+  }
+ },
+ "tasks": {
+  "clinc": {
+   "name": "CLINC150",
+   "kind": "choice",
+   "split": "train",
+   "licence": "CC BY 3.0",
+   "train_states": 15100,
+   "available": 15100,
+   "group": "in-domain",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 3,
+   "questions": {
+    "train": {
+     "choice/natural": 15100,
+     "score/derived": 15100,
+     "yesno/derived": 15100,
+     "choice_none_fits": 2328
+    },
+    "test_in": {
+     "choice/natural": 2000,
+     "score/derived": 2000,
+     "yesno/derived": 2000,
+     "choice_none_fits": 639
+    }
+   }
+  },
+  "ag_news": {
+   "name": "AG News",
+   "kind": "choice",
+   "split": "train",
+   "licence": "non-commercial research use",
+   "train_states": 15000,
+   "available": 119921,
+   "group": "in-domain",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 1,
+   "questions": {
+    "train": {
+     "choice/natural": 15000,
+     "yesno/derived": 15000,
+     "choice_none_fits": 2237
+    },
+    "dev": {
+     "choice/natural": 300,
+     "yesno/derived": 300,
+     "choice_none_fits": 44
+    },
+    "test_in": {
+     "choice/natural": 2000,
+     "yesno/derived": 2000,
+     "choice_none_fits": 289
+    }
+   }
+  },
+  "dbpedia": {
+   "name": "DBpedia-14",
+   "kind": "choice",
+   "split": "train",
+   "licence": "CC BY-SA 3.0",
+   "train_states": 15000,
+   "available": 560000,
+   "group": "in-domain",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "train": {
+     "choice/natural": 15000,
+     "yesno/derived": 15000,
+     "choice_none_fits": 2229
+    },
+    "dev": {
+     "choice/natural": 300,
+     "yesno/derived": 300,
+     "choice_none_fits": 36
+    },
+    "test_in": {
+     "choice/natural": 2000,
+     "yesno/derived": 2000,
+     "choice_none_fits": 271
+    }
+   }
+  },
+  "yahoo": {
+   "name": "Yahoo Answers",
+   "kind": "choice",
+   "split": "train",
+   "licence": "non-commercial research use",
+   "train_states": 15000,
+   "available": 699975,
+   "group": "in-domain",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "train": {
+     "choice/natural": 15000,
+     "yesno/derived": 15000,
+     "choice_none_fits": 2282
+    },
+    "dev": {
+     "choice/natural": 300,
+     "yesno/derived": 300,
+     "choice_none_fits": 42
+    },
+    "test_in": {
+     "choice/natural": 2000,
+     "yesno/derived": 2000,
+     "choice_none_fits": 285
+    }
+   }
+  },
+  "mnli": {
+   "name": "MultiNLI",
+   "kind": "yesno",
+   "split": "train",
+   "licence": "OANC and CC BY-SA 3.0 parts",
+   "train_states": 30000,
+   "available": 392570,
+   "group": "in-domain",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 61,
+   "questions": {
+    "train": {
+     "choice/derived": 30000,
+     "yesno/natural": 30000,
+     "choice_none_fits": 0
+    },
+    "dev": {
+     "choice/derived": 300,
+     "yesno/natural": 300,
+     "choice_none_fits": 0
+    },
+    "test_in": {
+     "choice/derived": 2000,
+     "yesno/natural": 2000,
+     "choice_none_fits": 0
+    }
+   }
+  },
+  "boolq": {
+   "name": "BoolQ",
+   "kind": "yesno",
+   "split": "train",
+   "licence": "CC BY-SA 3.0",
+   "train_states": 9427,
+   "available": 9427,
+   "group": "in-domain",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 954,
+   "questions": {
+    "train": {
+     "yesno/natural": 9427,
+     "choice_none_fits": 0
+    },
+    "test_in": {
+     "yesno/natural": 2000,
+     "choice_none_fits": 0
+    }
+   }
+  },
+  "yelp": {
+   "name": "Yelp-5",
+   "kind": "score",
+   "split": "train",
+   "licence": "Yelp dataset terms, non-commercial",
+   "train_states": 15000,
+   "available": 649945,
+   "group": "in-domain",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "train": {
+     "score/natural": 15000,
+     "yesno/derived": 11941,
+     "choice_none_fits": 0
+    },
+    "dev": {
+     "score/natural": 300,
+     "yesno/derived": 229,
+     "choice_none_fits": 0
+    },
+    "test_in": {
+     "score/natural": 2000,
+     "yesno/derived": 1612,
+     "choice_none_fits": 0
+    }
+   }
+  },
+  "trec": {
+   "name": "TREC-6",
+   "kind": "choice",
+   "licence": "research use",
+   "group": "held-out",
+   "eval_splits": [
+    "test",
+    "train"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "test_out": {
+     "choice/natural": 2000,
+     "yesno/derived": 2000,
+     "choice_none_fits": 316
+    }
+   }
+  },
+  "banking77": {
+   "name": "Banking77",
+   "kind": "choice",
+   "licence": "CC BY 4.0",
+   "group": "held-out",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "test_out": {
+     "choice/natural": 2000,
+     "yesno/derived": 2000,
+     "choice_none_fits": 305
+    }
+   }
+  },
+  "newsgroups": {
+   "name": "20 Newsgroups",
+   "kind": "choice",
+   "licence": "public domain release, research use",
+   "group": "held-out",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "test_out": {
+     "choice/natural": 2000,
+     "yesno/derived": 2000,
+     "choice_none_fits": 277
+    }
+   }
+  },
+  "rte": {
+   "name": "RTE",
+   "kind": "yesno",
+   "licence": "GLUE terms, research use",
+   "group": "held-out",
+   "eval_splits": [
+    "test",
+    "train"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "test_out": {
+     "yesno/natural": 2000,
+     "choice_none_fits": 0
+    }
+   }
+  },
+  "scitail": {
+   "name": "SciTail",
+   "kind": "yesno",
+   "licence": "Apache-2.0",
+   "group": "held-out",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "test_out": {
+     "yesno/natural": 2000,
+     "choice_none_fits": 0
+    }
+   }
+  },
+  "mrpc": {
+   "name": "MRPC",
+   "kind": "yesno",
+   "licence": "Microsoft Research licence, research use",
+   "group": "held-out",
+   "eval_splits": [
+    "test",
+    "train"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "test_out": {
+     "yesno/natural": 2000,
+     "choice_none_fits": 0
+    }
+   }
+  },
+  "sst5": {
+   "name": "SST-5",
+   "kind": "score",
+   "licence": "research use",
+   "group": "held-out",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "test_out": {
+     "score/natural": 2000,
+     "choice_none_fits": 0
+    }
+   }
+  },
+  "stsb": {
+   "name": "STS-B",
+   "kind": "score",
+   "licence": "CC BY-SA 4.0 and source terms",
+   "group": "held-out",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 1378,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "test_out": {
+     "score/natural": 1378,
+     "choice_none_fits": 0
+    }
+   }
+  },
+  "tweet_sentiment": {
+   "name": "TweetEval sentiment",
+   "kind": "score",
+   "licence": "Twitter terms, research use",
+   "group": "held-out",
+   "eval_splits": [
+    "test"
+   ],
+   "eval_states": 2000,
+   "dropped_as_seen_in_training": 0,
+   "questions": {
+    "test_out": {
+     "score/natural": 2000,
+     "choice_none_fits": 0
+    }
+   }
+  }
+ },
+ "train_tasks": [
+  "clinc",
+  "ag_news",
+  "dbpedia",
+  "yahoo",
+  "mnli",
+  "boolq",
+  "yelp"
+ ],
+ "held_out_tasks": [
+  "trec",
+  "banking77",
+  "newsgroups",
+  "rte",
+  "scitail",
+  "mrpc",
+  "sst5",
+  "stsb",
+  "tweet_sentiment"
+ ],
+ "outputs": {
+  "train.jsonl": "c586b75b03803faa32cb3a36d087f4b26dd83a5483bef7d200850068de12804e",
+  "dev.jsonl": "f3333e093912384e4f48124585cfacb5d795606d2eabefcc3d9bb430d68f1091",
+  "test_in.jsonl": "ca0ed50e6c895978ec278f02704810466628446998d884306d26e765d82c2c47",
+  "test_out.jsonl": "b7d5339fa61d9a92264d8ca3709079bb8a0a77d6171b1ce5ba935fb4a57708ec"
+ },
+ "counts": {
+  "train": 114527,
+  "dev": 1500,
+  "test_in": 14000,
+  "test_out": 17378
+ }
+}

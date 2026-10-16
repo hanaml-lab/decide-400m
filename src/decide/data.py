@@ -26,6 +26,9 @@ class Record:
     #: The right answer of each question, as a target: a choice's slot (0 when none fits, k + 1 for option k), a
     #: yes/no as 0 or 1, a score's level index.
     answers: list[int] = field(default_factory=list)
+    #: The task the state comes from, and each question's tag ("natural" or "derived"), when the file gives them.
+    task: str = ""
+    tags: list[str] = field(default_factory=list)
 
 
 def target(question: Question, answer) -> int:
@@ -44,12 +47,13 @@ def read(path: str | Path) -> Iterator[Record]:
             if not line.strip():
                 continue
             row = json.loads(line)
-            questions, answers = [], []
+            questions, answers, tags = [], [], []
             for q in row["questions"]:
+                tags.append(q.get("tag", ""))
                 question = Question(q["kind"], q["text"], tuple(q.get("options", ())))
                 questions.append(question)
                 try:
                     answers.append(target(question, q.get("answer")))
                 except ValueError as err:
                     raise ValueError(f"{path}:{n}: {err}") from err
-            yield Record(row["state"], questions, answers)
+            yield Record(row["state"], questions, answers, row.get("task", ""), tags)
