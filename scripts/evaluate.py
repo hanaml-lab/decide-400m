@@ -113,6 +113,7 @@ def main(argv=None):
     ap.add_argument("--data", default="data/mix")
     ap.add_argument("--limit", type=int, default=0, help="only the first n states of each suite (smoke tests)")
     ap.add_argument("--fp32-states", type=int, default=500, help="states with several questions for the fp32 checks")
+    ap.add_argument("--check-states", type=int, default=4000, help="states per suite for the bf16 invariance checks")
     args = ap.parse_args(argv)
     run, out = Path(args.run), Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -140,14 +141,20 @@ def main(argv=None):
         summary["suites"][name] = {"states": len(records), "questions": len(rows), "seconds": time.time() - s0}
         if name == "dev":
             continue
-        moved, perms = shuffled(records, seed=1)
+        # The checks read every k-th state of the suite, which spans all its tasks (the file is in task order).
+        stride = max(1, -(-len(records) // args.check_states))
+        picked = list(range(0, len(records), stride))
+        sub = [records[i] for i in picked]
+        at = {i: k for k, i in enumerate(picked)}
+        sub_rows = [dict(r, record=at[r["record"]]) for r in rows if r["record"] in at]
+        moved, perms = shuffled(sub, seed=1)
         tok.add(texts_of(moved))
         moved_rows = predict(model, [pack_record(tok, r, cfg) for r in moved], moved, cfg, device, tok.pad_id)
-        inv[name] = {"option_order": invariance(rows, moved_rows, perms)}
+        inv[name] = {"states_checked": len(sub), "option_order": invariance(sub_rows, moved_rows, perms)}
         if cfg.layout == "tree":
-            solo, where = alone(records)
+            solo, where = alone(sub)
             solo_rows = predict(model, [pack_record(tok, r, cfg) for r in solo], solo, cfg, device, tok.pad_id)
-            ref = {(r["record"], r["question"]): r["logits"] for r in rows}
+            ref = {(r["record"], r["question"]): r["logits"] for r in sub_rows}
             worst = max((max(abs(a - b) for a, b in zip(ref[where[s["record"]]], s["logits"])) for s in solo_rows),
                         default=0.0)
             inv[name]["asked_alone"] = {"questions": len(solo_rows), "max_logit_change": worst}
