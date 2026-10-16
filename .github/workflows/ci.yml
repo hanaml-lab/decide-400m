@@ -29,29 +29,28 @@ jobs:
           cache-dependency-path: pyproject.toml
       # The CPU build of torch, so the runner does not download CUDA libraries.
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - run: pip install -e ".[dev,hf]"
+      - run: pip install -e ".[dev,hf,analysis]"
       - run: ruff check .
       - run: pytest -q
       - name: Toy run on CPU
         run: python -m decide.demo
 
-  card:
-    # Regenerates the model card's illustrative numbers from the seeded simulation and checks them against the
-    # digest in card/results.sha256, with the library versions the digest was recorded with.
+  report:
+    # Recomputes every number of the report from the committed predictions (results/*/predictions_*.jsonl.gz) and
+    # checks it against results/summary.json. The training and evaluation runs themselves need a GPU and are not
+    # repeated here; scripts/run_all.sh runs them.
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     env:
-      OPENBLAS_CORETYPE: Haswell
       OPENBLAS_NUM_THREADS: "1"
-      NPY_DISABLE_CPU_FEATURES: "AVX512F AVX512CD AVX512_SKX AVX512_CLX AVX512_CNL AVX512_ICL AVX512_SPR"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - run: pip install "numpy==2.3.5" -e .
-      - run: python card/make_card.py > /dev/null
-      - run: python card/check_results.py
+      - run: pip install -e ".[analysis]"
+      - run: PYTHONPATH=src python scripts/analyze.py --results results --out /tmp/summary.json
+      - run: python scripts/check_summary.py /tmp/summary.json results/summary.json
       - name: CITATION.cff is valid
         run: pipx run cffconvert --validate
