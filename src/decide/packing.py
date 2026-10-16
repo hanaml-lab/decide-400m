@@ -106,10 +106,18 @@ class Packed:
 
 
 def pack(tok: Tokenizer, state: str, questions: Sequence[Question], max_state: int = 4096,
-         max_question: int = 64, max_option: int = 32) -> Packed:
-    """Lays out a state and its questions for one tree-masked pass. Long texts are cut at the given lengths."""
+         max_question: int = 64, max_option: int = 32, layout: str = "tree") -> Packed:
+    """Lays out a state and its questions for one pass. Long texts are cut at the given lengths.
+
+    ``layout="tree"`` is decide-400m's: the attention tree and shared position ids described above. ``layout="flat"``
+    is the ablation that reads the same sequence the ordinary way, with every token attending to every other and
+    position ids counting along the sequence, so options see each other and their order (``Packed`` then labels
+    every token ``STATE``, which ``tree_mask`` reads as full attention).
+    """
     if not questions:
         raise ValueError("ask at least one question")
+    if layout not in ("tree", "flat"):
+        raise ValueError(f"layout must be 'tree' or 'flat', not {layout!r}")
     state_ids = [tok.cls_id] + tok.encode(state)[: max_state - 1]
     ids = list(state_ids)
     positions = list(range(len(state_ids)))
@@ -134,7 +142,48 @@ def pack(tok: Tokenizer, state: str, questions: Sequence[Question], max_state: i
             qgroup += [qi] * len(body)
             ogroup += [oi] * len(body)
         p.opt_markers.append(markers)
+    if layout == "flat":
+        p.positions = list(range(len(ids)))
+        p.qgroup = [STATE] * len(ids)
+        p.ogroup = [STATE] * len(ids)
     return p
+
+
+@dataclass
+class Separate:
+    """One state and its questions read one pass per option, the way a cross-encoder or a zero-shot NLI classifier
+    reads them (the ablation of tree packing). Each question has a pass of its own, [CLS] state [Q] kind question,
+    whose [Q] vector it uses; each option has a pass [CLS] state [Q] kind question [OPT] option, whose [OPT] vector
+    it uses. Every pass is ordinary full attention, so the state is re-read, and conditioned on the question and
+    option, every time. ``q_at[i]`` and ``opt_at[i][k]`` are (sequence, token) coordinates."""
+
+    questions: list[Question]
+    sequences: list[Packed]
+    q_at: list[tuple[int, int]]
+    opt_at: list[list[tuple[int, int]]]
+
+
+def pack_separate(tok: Tokenizer, state: str, questions: Sequence[Question], max_state: int = 4096,
+                  max_question: int = 64, max_option: int = 32) -> Separate:
+    if not questions:
+        raise ValueError("ask at least one question")
+    state_ids = [tok.cls_id] + tok.encode(state)[: max_state - 1]
+    seqs, q_at, opt_at = [], [], []
+
+    def flat(ids):
+        return Packed(ids, list(range(len(ids))), [STATE] * len(ids), [STATE] * len(ids), [])
+
+    for question in questions:
+        head = [tok.q_id, tok.kind_ids[question.kind]] + tok.encode(question.text)[: max_question - 2]
+        q_at.append((len(seqs), len(state_ids)))
+        seqs.append(flat(state_ids + head))
+        at = []
+        for option in question.options:
+            body = [tok.opt_id] + tok.encode(option)[: max_option - 1]
+            at.append((len(seqs), len(state_ids) + len(head)))
+            seqs.append(flat(state_ids + head + body))
+        opt_at.append(at)
+    return Separate(list(questions), seqs, q_at, opt_at)
 
 
 def allowed(qgroup: Sequence[int], ogroup: Sequence[int]) -> list[list[bool]]:

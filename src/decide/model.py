@@ -9,30 +9,68 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
 
 from .encoders import tree_mask
 from .heads import ChoiceHead, ScoreHead, YesNoHead, level_probs
-from .packing import PAD, Packed, Question, Tokenizer, pack
+from .packing import PAD, Packed, Question, Separate, Tokenizer, pack
 
 
 @dataclass
 class Batch:
+    """Encoder rows and, for every request, where each question's [Q] vector and each option's [OPT] vector are:
+    ``q_at[b][i]`` and ``opt_at[b][i][k]`` are (row, token) coordinates. Tree and flat packing give one row per
+    request; one pass per option (``collate_separate``) gives several."""
+
     ids: torch.Tensor
     positions: torch.Tensor
     qgroup: torch.Tensor
     ogroup: torch.Tensor
-    packs: list[Packed]
+    packs: list
+    q_at: list = field(default_factory=list)
+    opt_at: list = field(default_factory=list)
+
+    @property
+    def questions(self) -> list[list[Question]]:
+        return [p.questions for p in self.packs]
+
+    def to(self, device) -> "Batch":
+        for name in ("ids", "positions", "qgroup", "ogroup"):
+            setattr(self, name, getattr(self, name).to(device, non_blocking=True))
+        return self
+
+
+def _grid(rows: Sequence, fill: int, n: int) -> torch.Tensor:
+    out = np.full((len(rows), n), fill, dtype=np.int64)
+    for r, row in enumerate(rows):
+        out[r, : len(row)] = row
+    return torch.from_numpy(out)
 
 
 def collate(packs: Sequence[Packed], pad_id: int) -> Batch:
     n = max(len(p) for p in packs)
-    def grid(fill, rows):
-        return torch.tensor([row + [fill] * (n - len(row)) for row in rows], dtype=torch.long)
-    return Batch(grid(pad_id, [p.ids for p in packs]), grid(0, [p.positions for p in packs]),
-                 grid(PAD, [p.qgroup for p in packs]), grid(PAD, [p.ogroup for p in packs]), list(packs))
+    q_at = [[(b, m) for m in p.q_markers] for b, p in enumerate(packs)]
+    opt_at = [[[(b, m) for m in ms] for ms in p.opt_markers] for b, p in enumerate(packs)]
+    return Batch(_grid([p.ids for p in packs], pad_id, n), _grid([p.positions for p in packs], 0, n),
+                 _grid([p.qgroup for p in packs], PAD, n), _grid([p.ogroup for p in packs], PAD, n), list(packs),
+                 q_at, opt_at)
+
+
+def collate_separate(requests: Sequence[Separate], pad_id: int) -> Batch:
+    """Batches requests read one pass per option: every pass of every request is a row."""
+    seqs, q_at, opt_at = [], [], []
+    for r in requests:
+        base = len(seqs)
+        seqs += r.sequences
+        q_at.append([(base + s, t) for s, t in r.q_at])
+        opt_at.append([[(base + s, t) for s, t in at] for at in r.opt_at])
+    n = max(len(p) for p in seqs)
+    return Batch(_grid([p.ids for p in seqs], pad_id, n), _grid([p.positions for p in seqs], 0, n),
+                 _grid([p.qgroup for p in seqs], PAD, n), _grid([p.ogroup for p in seqs], PAD, n), list(requests),
+                 q_at, opt_at)
 
 
 @dataclass
@@ -47,11 +85,11 @@ class Logits:
 
 
 class DecisionModel(nn.Module):
-    def __init__(self, encoder: nn.Module, heads: int = 4):
+    def __init__(self, encoder: nn.Module, heads: int = 4, none_slot: bool = True):
         super().__init__()
         self.encoder = encoder
         d = encoder.hidden_size
-        self.choice_head = ChoiceHead(d, heads)
+        self.choice_head = ChoiceHead(d, heads, none_slot=none_slot)
         self.yesno_head = YesNoHead(d)
         self.score_head = ScoreHead(d)
 
@@ -60,25 +98,24 @@ class DecisionModel(nn.Module):
         h = self.encoder(batch.ids, batch.positions, mask)
         d = h.shape[-1]
         rows: dict[str, list[tuple[int, int]]] = {"choice": [], "yesno": [], "score": []}
-        for b, p in enumerate(batch.packs):
-            for i, question in enumerate(p.questions):
+        for b, questions in enumerate(batch.questions):
+            for i, question in enumerate(questions):
                 rows[question.kind].append((b, i))
 
         def q_vectors(kind):
-            idx = [(b, batch.packs[b].q_markers[i]) for b, i in rows[kind]]
+            idx = [batch.q_at[b][i] for b, i in rows[kind]]
             if not idx:
                 return h.new_zeros((0, d))
-            bs, ts = zip(*idx)
-            return h[list(bs), list(ts)]
+            r, t = zip(*idx)
+            return h[torch.tensor(r, device=h.device), torch.tensor(t, device=h.device)]
 
         def option_vectors(kind):
-            where = rows[kind]
-            markers = [batch.packs[b].opt_markers[i] for b, i in where]
-            k = max(len(m) for m in markers)
-            index = torch.tensor([m + [0] * (k - len(m)) for m in markers], device=h.device)
-            valid = torch.tensor([[True] * len(m) + [False] * (k - len(m)) for m in markers], device=h.device)
-            rows_b = torch.tensor([b for b, _ in where], device=h.device)[:, None].expand(-1, k)
-            return h[rows_b, index] * valid[..., None], valid
+            coords = [batch.opt_at[b][i] for b, i in rows[kind]]
+            k = max(len(c) for c in coords)
+            r = torch.tensor([[x for x, _ in c] + [0] * (k - len(c)) for c in coords], device=h.device)
+            t = torch.tensor([[y for _, y in c] + [0] * (k - len(c)) for c in coords], device=h.device)
+            valid = torch.tensor([[True] * len(c) + [False] * (k - len(c)) for c in coords], device=h.device)
+            return h[r, t] * valid[..., None], valid
 
         if rows["choice"]:
             options, valid = option_vectors("choice")
@@ -94,24 +131,28 @@ class DecisionModel(nn.Module):
         return Logits(choice, yesno, eta, cuts, rows)
 
 
-def loss(out: Logits, targets: dict[str, torch.Tensor]) -> torch.Tensor:
-    """Mean negative log-likelihood over every question in the batch.
+def loss_terms(out: Logits, targets: dict[str, torch.Tensor]) -> dict[str, tuple[torch.Tensor, int]]:
+    """Summed negative log-likelihood and question count of each kind, in fp32.
 
     ``targets["choice"]`` holds the slot of the right answer (0 when none fits, k + 1 for option k);
     ``targets["yesno"]`` holds 0 or 1; ``targets["score"]`` the index of the right level.
     """
-    terms, count = [], 0
+    terms = {}
     if len(out.choice):
-        terms.append(F.cross_entropy(out.choice, targets["choice"], reduction="sum"))
-        count += len(out.choice)
+        terms["choice"] = (F.cross_entropy(out.choice.float(), targets["choice"], reduction="sum"), len(out.choice))
     if len(out.yesno):
-        terms.append(F.binary_cross_entropy_with_logits(out.yesno, targets["yesno"].float(), reduction="sum"))
-        count += len(out.yesno)
+        terms["yesno"] = (F.binary_cross_entropy_with_logits(out.yesno.float(), targets["yesno"].float(),
+                                                             reduction="sum"), len(out.yesno))
     if len(out.eta):
-        p = level_probs(out.eta, out.cuts)
-        terms.append(-torch.log(p.gather(1, targets["score"][:, None]).clamp_min(1e-9)).sum())
-        count += len(out.eta)
-    return torch.stack(terms).sum() / max(count, 1)
+        p = level_probs(out.eta.float(), out.cuts.float())
+        terms["score"] = (-torch.log(p.gather(1, targets["score"][:, None]).clamp_min(1e-9)).sum(), len(out.eta))
+    return terms
+
+
+def loss(out: Logits, targets: dict[str, torch.Tensor]) -> torch.Tensor:
+    """Mean negative log-likelihood over every question in the batch (``loss_terms`` gives it by kind)."""
+    terms = loss_terms(out, targets)
+    return torch.stack([v for v, _ in terms.values()]).sum() / max(sum(n for _, n in terms.values()), 1)
 
 
 @dataclass

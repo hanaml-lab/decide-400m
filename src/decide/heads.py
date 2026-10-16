@@ -29,8 +29,12 @@ def mlp(d: int, out: int) -> nn.Sequential:
 
 
 class ChoiceHead(nn.Module):
-    def __init__(self, d: int, heads: int = 4):
+    """``none_slot=False`` is the ablation without the *none fits* slot: slot 0 is masked out of the set layer and
+    its logit is -inf, so the head is a softmax over the given options only, as an ordinary classifier's is."""
+
+    def __init__(self, d: int, heads: int = 4, none_slot: bool = True):
         super().__init__()
+        self.none_slot = none_slot
         self.none = nn.Parameter(torch.zeros(d))
         self.seed = nn.Linear(d, d)
         self.attn = nn.MultiheadAttention(d, heads, batch_first=True)
@@ -40,8 +44,9 @@ class ChoiceHead(nn.Module):
     def forward(self, q: torch.Tensor, options: torch.Tensor, valid: torch.Tensor) -> torch.Tensor:
         """q: (n, d); options: (n, K, d); valid: (n, K) bool. Returns (n, 1 + K) logits, slot 0 is *none fits*."""
         slots = torch.cat([(self.none + self.seed(q))[:, None], options], dim=1)
-        keep = torch.cat([torch.ones_like(valid[:, :1]), valid], dim=1)
+        keep = torch.cat([torch.full_like(valid[:, :1], self.none_slot), valid], dim=1)
         mixed, _ = self.attn(slots, slots, slots, key_padding_mask=~keep, need_weights=False)
+        mixed = mixed.nan_to_num(0.0)
         logits = self.score(self.norm(slots + mixed)).squeeze(-1)
         return logits.masked_fill(~keep, float("-inf"))
 
