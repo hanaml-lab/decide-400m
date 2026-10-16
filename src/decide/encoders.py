@@ -14,6 +14,7 @@ import math
 
 import torch
 import torch.nn.functional as F
+import torch.utils.checkpoint
 from torch import nn
 
 from .packing import PAD, STATE
@@ -84,38 +85,55 @@ class TinyEncoder(nn.Module):
 class TreeMaskedModernBert(nn.Module):
     """Runs a Hugging Face ``ModernBertModel`` under a tree mask with tree position ids.
 
-    The model's own forward builds its masks from a 2-D padding mask; this wrapper builds the additive masks itself
-    (the global one from the tree, the local one from the tree and the distance in position ids) and calls the same
+    The model's own forward builds its masks from a 2-D padding mask; this wrapper builds the masks itself (the
+    global one from the tree, the local one from the tree and the distance in position ids) and calls the same
     embedding, layers and final norm. It needs ``attn_implementation`` "sdpa" or "eager": flash attention does not
-    take an arbitrary mask.
+    take an arbitrary mask. Under "sdpa" the masks are boolean, which ``scaled_dot_product_attention`` takes in any
+    precision; "eager" gets additive masks. ``checkpointing`` recomputes each layer in the backward pass instead of
+    storing its activations, which training on a small GPU needs.
     """
 
-    def __init__(self, model):
+    def __init__(self, model, checkpointing: bool = False):
         super().__init__()
         impl = getattr(model.config, "_attn_implementation", "sdpa")
         if impl not in ("sdpa", "eager"):
             raise ValueError(f"tree masks need sdpa or eager attention, not {impl!r}")
         self.model = model
         self.hidden_size = model.config.hidden_size
+        self.checkpointing = checkpointing
+        self.additive = impl == "eager"
 
     @classmethod
-    def from_pretrained(cls, name: str = "answerdotai/ModernBERT-large", **kwargs) -> "TreeMaskedModernBert":
+    def from_pretrained(cls, name: str = "answerdotai/ModernBERT-large", checkpointing: bool = False,
+                        **kwargs) -> "TreeMaskedModernBert":
         from transformers import AutoModel
 
-        return cls(AutoModel.from_pretrained(name, attn_implementation="sdpa", **kwargs))
+        return cls(AutoModel.from_pretrained(name, attn_implementation="sdpa", **kwargs), checkpointing)
 
     def resize(self, vocab_size: int) -> None:
         """Makes room for the marker tokens a tokenizer adds ([Q], [OPT] and the three kinds)."""
         self.model.resize_token_embeddings(vocab_size)
 
-    def forward(self, ids: torch.Tensor, positions: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def masks(self, positions: torch.Tensor, mask: torch.Tensor):
         m = self.model
+        window = (positions[:, :, None] - positions[:, None, :]).abs() <= m.config.local_attention // 2
+        global_mask, local_mask = mask[:, None], (mask & window)[:, None]
+        if not self.additive:
+            return global_mask, local_mask
         dtype = next(m.parameters()).dtype
         neg = torch.finfo(dtype).min
-        global_mask = torch.zeros(mask.shape, dtype=dtype, device=ids.device).masked_fill(~mask, neg)[:, None]
-        window = (positions[:, :, None] - positions[:, None, :]).abs() <= m.config.local_attention // 2
-        local_mask = torch.zeros(mask.shape, dtype=dtype, device=ids.device).masked_fill(~(mask & window), neg)[:, None]
+        zeros = torch.zeros(global_mask.shape, dtype=dtype, device=mask.device)
+        return zeros.masked_fill(~global_mask, neg), zeros.masked_fill(~local_mask, neg)
+
+    def forward(self, ids: torch.Tensor, positions: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        m = self.model
+        global_mask, local_mask = self.masks(positions, mask)
         h = m.embeddings(input_ids=ids)
         for layer in m.layers:
-            h = layer(h, attention_mask=global_mask, sliding_window_mask=local_mask, position_ids=positions)[0]
+            if self.checkpointing and self.training and torch.is_grad_enabled():
+                h = torch.utils.checkpoint.checkpoint(
+                    lambda x, layer=layer: layer(x, attention_mask=global_mask, sliding_window_mask=local_mask,
+                                                 position_ids=positions)[0], h, use_reentrant=False)
+            else:
+                h = layer(h, attention_mask=global_mask, sliding_window_mask=local_mask, position_ids=positions)[0]
         return m.final_norm(h)
