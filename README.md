@@ -113,11 +113,11 @@ for answer in answers:
 ## Citation
 
 ```bibtex
-@techreport{agarwal2026decide,
+@techreport{agarwal2025decide,
   title       = {Decide or Defer: Typed Questions about Application State in One Encoder Pass, with a Certified Error Rate on the Decisions Made},
   author      = {Agarwal, Manav},
   institution = {hanaML},
-  year        = {2026},
+  year        = {2025},
   url         = {https://hanaml.com/research/papers/decide-400m-report}
 }
 ```
