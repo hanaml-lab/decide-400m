@@ -30,6 +30,7 @@ import numpy as np
 import torch
 
 from .data import Record, read
+from .encoders import tree_mask
 from .model import Batch, DecisionModel, Logits, collate, collate_separate, loss_terms
 from .packing import Packed, Separate, pack, pack_separate
 
@@ -40,23 +41,30 @@ class RunConfig:
     backbone: str = "answerdotai/ModernBERT-large"
     layout: str = "tree"  # tree | flat | separate
     none_slot: bool = True
+    readout: str = "marker"  # marker: the [Q] and [OPT] vectors; pool: each plus the mean of its block's tokens
     max_state: int = 512
     max_question: int = 64
     max_option: int = 32
     epochs: float = 1.0
     batch_size: int = 32  # states per optimizer step
     token_budget: int = 6144  # padded tokens per micro-batch
-    lr: float = 3e-5  # encoder
+    batching: str = "by_length"  # by_length: steps of states of similar length; mixed: random states per step
+    lr: float = 3e-5  # encoder: the top layer's rate
+    layer_decay: float = 1.0  # layer-wise decay: layer l of L trains at lr * layer_decay ** (L - l); embeddings below
     head_lr: float = 1e-4  # heads, freshly initialised
     weight_decay: float = 0.01
     warmup: float = 0.06
     optimizer: str = "adamw8bit"  # or "adamw"
+    embedding_32bit: bool = False  # keep the token embeddings' optimizer state in 32 bits
     checkpointing: bool = True
     bf16: bool = True
     seed: int = 0
     train_limit: int = 0  # 0: every training state; n: the first n of a seeded shuffle (matched-budget ablations)
     gpu_memory_gb: float = 6.2
     max_steps: int = 0  # 0: the whole schedule; n: stop after n steps (smoke tests)
+    standardize_states: int = 2000  # states whose [Q] and [OPT] vectors fix the heads' input standardisation
+    head_warmup_steps: int = 0  # LP-FT: train the heads alone on the frozen encoder for this many steps first
+    head_warmup_lr: float = 1e-3
     log_every: int = 50
     eval_every: int = 500
     train: str = "data/mix/train.jsonl"
@@ -156,18 +164,26 @@ def micro_batches(items: Sequence, order: Sequence[int], budget: int) -> list[li
 
 
 def steps_of(items: Sequence, cfg: RunConfig, rng: random.Random) -> list[list[list[int]]]:
-    """One epoch: optimizer steps of ``batch_size`` states, each as micro-batches. States are grouped by length
-    inside windows of 64 steps, and the steps are then shuffled."""
+    """One epoch of optimizer steps of ``batch_size`` states, each split into micro-batches.
+
+    ``by_length``: states are sorted by length inside windows of 64 steps, cut into steps, and the steps shuffled.
+    Padding is about 2%; since length follows the task, a step holds mostly one task, as in multi-task training
+    with task-homogeneous batches. ``mixed``: each step draws states at random, so it mixes tasks; padding is
+    40-50% (README, "Training")."""
     idx = list(range(len(items)))
     rng.shuffle(idx)
-    window = cfg.batch_size * 64
+    size = lambda i: cost(items[i])[0] * cost(items[i])[1]  # noqa: E731
     steps = []
-    for s in range(0, len(idx), window):
-        chunk = sorted(idx[s: s + window], key=lambda i: cost(items[i])[0] * cost(items[i])[1])
-        for b in range(0, len(chunk), cfg.batch_size):
-            batch = chunk[b: b + cfg.batch_size]
-            steps.append(micro_batches(items, batch, cfg.token_budget))
-    rng.shuffle(steps)
+    if cfg.batching == "by_length":
+        window = cfg.batch_size * 64
+        for s in range(0, len(idx), window):
+            chunk = sorted(idx[s: s + window], key=size)
+            for b in range(0, len(chunk), cfg.batch_size):
+                steps.append(micro_batches(items, chunk[b: b + cfg.batch_size], cfg.token_budget))
+        rng.shuffle(steps)
+        return steps
+    for b in range(0, len(idx), cfg.batch_size):
+        steps.append(micro_batches(items, sorted(idx[b: b + cfg.batch_size], key=size), cfg.token_budget))
     return steps
 
 
@@ -188,26 +204,43 @@ def build_model(cfg: RunConfig, vocab: int, device: str) -> DecisionModel:
 
     encoder = TreeMaskedModernBert.from_pretrained(cfg.backbone, checkpointing=cfg.checkpointing)
     encoder.resize(vocab)
-    return DecisionModel(encoder, heads=16, none_slot=cfg.none_slot).to(device)
+    return DecisionModel(encoder, heads=16, none_slot=cfg.none_slot, readout=cfg.readout).to(device)
 
 
 def optimizer_for(model: DecisionModel, cfg: RunConfig):
-    enc_decay, enc_plain, heads = [], [], []
+    """AdamW over three kinds of parameter: encoder matrices (weight decay), encoder norms and embeddings (none),
+    and the heads (their own rate). With ``layer_decay`` < 1 each encoder layer gets its own rate, decaying from
+    the top layer down to the embeddings, as in fine-tuning recipes for large encoders."""
+    layers = getattr(getattr(model.encoder, "model", None), "layers", None)
+    depth = len(layers) if layers is not None else 0
+
+    def depth_of(name: str) -> int:
+        if ".layers." in name:
+            return int(name.split(".layers.")[1].split(".")[0]) + 1
+        return 0 if "embeddings" in name else depth + 1  # embeddings at the bottom, the final norm at the top
+
+    groups: dict = {}
     for name, p in model.named_parameters():
         if not p.requires_grad:
             continue
         if name.startswith("encoder."):
-            (enc_decay if p.ndim >= 2 and "embeddings" not in name else enc_plain).append(p)
+            scale = cfg.layer_decay ** max(0, depth + 1 - depth_of(name) - 1) if depth else 1.0
+            decay = p.ndim >= 2 and "embeddings" not in name
+            key = (round(cfg.lr * scale, 12), cfg.weight_decay if decay else 0.0)
         else:
-            heads.append(p)
-    groups = [{"params": enc_decay, "lr": cfg.lr, "weight_decay": cfg.weight_decay},
-              {"params": enc_plain, "lr": cfg.lr, "weight_decay": 0.0},
-              {"params": heads, "lr": cfg.head_lr, "weight_decay": cfg.weight_decay}]
+            key = (cfg.head_lr, cfg.weight_decay)
+        groups.setdefault(key, []).append(p)
+    param_groups = [{"params": ps, "lr": lr, "weight_decay": wd} for (lr, wd), ps in groups.items()]
     if cfg.optimizer == "adamw8bit":
         import bitsandbytes as bnb
 
-        return bnb.optim.AdamW8bit(groups, betas=(0.9, 0.999), eps=1e-8)
-    return torch.optim.AdamW(groups, betas=(0.9, 0.999), eps=1e-8)
+        if cfg.embedding_32bit:
+            mng = bnb.optim.GlobalOptimManager.get_instance()
+            for name, p in model.named_parameters():
+                if "tok_embeddings" in name:
+                    mng.override_config(p, "optim_bits", 32)
+        return bnb.optim.AdamW8bit(param_groups, betas=(0.9, 0.999), eps=1e-8)
+    return torch.optim.AdamW(param_groups, betas=(0.9, 0.999), eps=1e-8, foreach=False)  # no multi-tensor temporaries
 
 
 def autocast(cfg: RunConfig, device: str):
@@ -306,6 +339,58 @@ def machine() -> dict:
     return info
 
 
+@torch.no_grad()
+def fit_standardization(model: DecisionModel, items, cfg: RunConfig, device: str, pad_id: int, rng: random.Random) -> None:
+    """Sets the heads' input standardisation from the [Q] and [OPT] vectors of ``standardize_states`` training
+    states, read by the untrained encoder."""
+    model.eval()
+    sample = rng.sample(range(len(items)), min(cfg.standardize_states, len(items)))
+    order = sorted(sample, key=lambda i: cost(items[i])[0] * cost(items[i])[1])
+    vecs = []
+    for group in micro_batches(items, order, cfg.token_budget * 2):
+        batch = make_batch(items, group, pad_id).to(device)
+        with autocast(cfg, device):
+            h = model.encoder(batch.ids, batch.positions, tree_mask(batch.qgroup, batch.ogroup)).float()
+        coords = [c for qs in batch.q_at for c in qs] + [c for qs in batch.opt_at for opts in qs for c in opts]
+        r = torch.tensor([x for x, _ in coords], device=h.device)
+        t = torch.tensor([y for _, y in coords], device=h.device)
+        vecs.append(h[r, t])
+    model.standardize(torch.cat(vecs))
+
+
+def warm_heads(model: DecisionModel, items, records, cfg: RunConfig, device: str, pad_id: int, rng: random.Random,
+               record, log) -> None:
+    """LP-FT's first stage (Kumar et al., 2022): the heads alone, on features of the frozen encoder, so that full
+    fine-tuning starts from heads whose gradients carry signal. The encoder runs without gradients."""
+    heads = [p for n, p in model.named_parameters() if not n.startswith("encoder.")]
+    opt = torch.optim.AdamW(heads, lr=cfg.head_warmup_lr, weight_decay=cfg.weight_decay)
+    plan = steps_of(items, cfg, rng)[: cfg.head_warmup_steps]
+    run: dict = {"loss": {}, "n": {}}
+    t0 = time.time()
+    for step, micro in enumerate(plan, 1):
+        model.train()
+        nq = sum(len(records[i].questions) for g in micro for i in g)
+        for group in micro:
+            batch = make_batch(items, group, pad_id).to(device)
+            with autocast(cfg, device):
+                with torch.no_grad():
+                    h = model.encoder(batch.ids, batch.positions, tree_mask(batch.qgroup, batch.ogroup))
+                logits = model.heads_from(h, batch)
+            terms = loss_terms(logits, targets_for(records, group, logits.where, device))
+            (torch.stack([v for v, _ in terms.values()]).sum() / nq).backward()
+            for k, (v, n) in terms.items():
+                run["loss"][k] = run["loss"].get(k, 0.0) + v.item()
+                run["n"][k] = run["n"].get(k, 0) + n
+        opt.step()
+        opt.zero_grad(set_to_none=True)
+        if step % cfg.log_every == 0 or step == len(plan):
+            row = {"event": "head_warmup", "step": step, "of": len(plan),
+                   "loss": {k: run["loss"][k] / run["n"][k] for k in run["loss"]}, "elapsed_s": time.time() - t0}
+            record(row)
+            log(f"heads {step}/{len(plan)} " + " ".join(f"{k} {v:.3f}" for k, v in row["loss"].items()))
+            run = {"loss": {}, "n": {}}
+
+
 def train(cfg: RunConfig, out: Path, log: Callable[[str], None] = print) -> dict:
     from .tokenizer import HFTokenizer
 
@@ -352,6 +437,12 @@ def train(cfg: RunConfig, out: Path, log: Callable[[str], None] = print) -> dict
             "time": time.strftime("%Y-%m-%dT%H:%M:%S")})
     run = {"loss": {}, "n": {}, "tokens": 0, "padded": 0, "states": 0}
     tick, train_start, tokens_total = time.time(), time.time(), 0
+    if cfg.standardize_states:
+        fit_standardization(model, items, cfg, device, tok.pad_id, random.Random(cfg.seed + 7))
+        record({"event": "standardize", "states": cfg.standardize_states,
+                "mean_abs_mean": float(model.feature_mean.abs().mean()), "mean_std": float(model.feature_std.mean())})
+    if cfg.head_warmup_steps:
+        warm_heads(model, items, records, cfg, device, tok.pad_id, rng, record, log)
     last = len(plan)
     for step, micro in enumerate(plan, 1):
         model.train()
@@ -369,7 +460,9 @@ def train(cfg: RunConfig, out: Path, log: Callable[[str], None] = print) -> dict
             run["tokens"] += int((batch.qgroup != -2).sum())
             run["padded"] += batch.ids.numel()
             run["states"] += len(group)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0))
+        run["grad"] = run.get("grad", 0.0) + grad_norm
+        run["steps"] = run.get("steps", 0) + 1
         opt.step()
         sched.step()
         opt.zero_grad(set_to_none=True)
@@ -380,10 +473,11 @@ def train(cfg: RunConfig, out: Path, log: Callable[[str], None] = print) -> dict
                    "loss": {k: run["loss"][k] / run["n"][k] for k in run["loss"]},
                    "tokens_per_s": run["tokens"] / dt, "states_per_s": run["states"] / dt,
                    "padding": 1 - run["tokens"] / max(run["padded"], 1), "elapsed_s": time.time() - train_start,
+                   "grad_norm": run["grad"] / max(run["steps"], 1),
                    "peak_gb": torch.cuda.max_memory_allocated() / 2**30 if device == "cuda" else 0.0}
             record(row)
             log(f"step {step}/{total} " + " ".join(f"{k} {v:.3f}" for k, v in row["loss"].items())
-                + f" | {row['tokens_per_s']:.0f} tok/s, peak {row['peak_gb']:.2f} GB, {row['elapsed_s'] / 60:.1f} min")
+                + f" | grad {row['grad_norm']:.2f} | {row['tokens_per_s']:.0f} tok/s, peak {row['peak_gb']:.2f} GB, {row['elapsed_s'] / 60:.1f} min")
             run = {"loss": {}, "n": {}, "tokens": 0, "padded": 0, "states": 0}
             tick = time.time()
         if step % cfg.eval_every == 0 or step == last:

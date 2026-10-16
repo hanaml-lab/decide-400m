@@ -34,3 +34,4 @@ select = ["E4", "E7", "E9", "F", "W"]
 
 [tool.ruff.lint.per-file-ignores]
 "card/*" = ["E701", "E702", "E731", "E741"]
+"scripts/diagnose_*" = ["E701", "E702", "E741"]

@@ -117,3 +117,22 @@ def test_modernbert_bool_masks_match_additive():
     out = enc(ids, pos, mask)
     out.sum().backward()
     assert bert.embeddings.tok_embeddings.weight.grad is not None
+
+
+def test_pooled_readout_keeps_the_invariances(tok):
+    from decide.encoders import TinyEncoder
+    from decide.model import DecisionModel
+
+    torch.manual_seed(0)
+    m = DecisionModel(TinyEncoder(len(tok), d=32, layers=2, heads=4, ff=64, dropout=0.0), readout="pool").eval()
+    a = m(collate([pack(tok, STATE_TEXT, [YN, CHOICE, SCORE])], tok.pad_id))
+    order = [2, 0, 3, 1]
+    shuffled = Choice(CHOICE.text, [CHOICE.options[i] for i in order])
+    b = m(collate([pack(tok, STATE_TEXT, [shuffled, SCORE, YN])], tok.pad_id))
+    assert torch.allclose(a.choice[0, 1:][order], b.choice[0, 1:], atol=1e-5)
+    assert torch.allclose(a.choice[0, 0], b.choice[0, 0], atol=1e-5)
+    assert torch.allclose(a.yesno, b.yesno, atol=1e-5) and torch.allclose(a.cuts, b.cuts, atol=1e-5)
+    alone = m(collate([pack(tok, STATE_TEXT, [YN])], tok.pad_id))
+    assert torch.allclose(alone.yesno, a.yesno, atol=1e-5)
+    sep = m(collate_separate([pack_separate(tok, STATE_TEXT, [CHOICE, YN])], tok.pad_id))
+    assert torch.isfinite(sep.choice[0, 1:]).all() and sep.yesno.shape == (1,)

@@ -100,6 +100,10 @@ class Packed:
     q_markers: list[int] = field(default_factory=list)
     #: For each question, the index of each option's [OPT] marker (empty for yes/no).
     opt_markers: list[list[int]] = field(default_factory=list)
+    #: The (start, end) span of each question's own text, after its markers, and of each option's own tokens, after
+    #: its [OPT] marker: what a pooled readout (``DecisionModel(readout="pool")``) averages.
+    q_spans: list[tuple[int, int]] = field(default_factory=list)
+    opt_spans: list[list[tuple[int, int]]] = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.ids)
@@ -128,20 +132,23 @@ def pack(tok: Tokenizer, state: str, questions: Sequence[Question], max_state: i
     for qi, question in enumerate(questions):
         head = [tok.q_id, tok.kind_ids[question.kind]] + tok.encode(question.text)[: max_question - 2]
         p.q_markers.append(len(ids))
+        p.q_spans.append((len(ids) + 2, len(ids) + len(head)))
         ids += head
         positions += range(start, start + len(head))
         qgroup += [qi] * len(head)
         ogroup += [STATE] * len(head)
-        markers = []
+        markers, spans = [], []
         option_start = start + len(head)
         for oi, option in enumerate(question.options):
             body = [tok.opt_id] + tok.encode(option)[: max_option - 1]
             markers.append(len(ids))
+            spans.append((len(ids) + 1, len(ids) + len(body)))
             ids += body
             positions += range(option_start, option_start + len(body))
             qgroup += [qi] * len(body)
             ogroup += [oi] * len(body)
         p.opt_markers.append(markers)
+        p.opt_spans.append(spans)
     if layout == "flat":
         p.positions = list(range(len(ids)))
         p.qgroup = [STATE] * len(ids)
@@ -161,6 +168,9 @@ class Separate:
     sequences: list[Packed]
     q_at: list[tuple[int, int]]
     opt_at: list[list[tuple[int, int]]]
+    #: (sequence, start, end) of each question's text and each option's tokens, for the pooled readout.
+    q_span: list[tuple[int, int, int]] = field(default_factory=list)
+    opt_span: list[list[tuple[int, int, int]]] = field(default_factory=list)
 
 
 def pack_separate(tok: Tokenizer, state: str, questions: Sequence[Question], max_state: int = 4096,
@@ -168,7 +178,7 @@ def pack_separate(tok: Tokenizer, state: str, questions: Sequence[Question], max
     if not questions:
         raise ValueError("ask at least one question")
     state_ids = [tok.cls_id] + tok.encode(state)[: max_state - 1]
-    seqs, q_at, opt_at = [], [], []
+    seqs, q_at, opt_at, q_span, opt_span = [], [], [], [], []
 
     def flat(ids):
         return Packed(ids, list(range(len(ids))), [STATE] * len(ids), [STATE] * len(ids), [])
@@ -176,14 +186,17 @@ def pack_separate(tok: Tokenizer, state: str, questions: Sequence[Question], max
     for question in questions:
         head = [tok.q_id, tok.kind_ids[question.kind]] + tok.encode(question.text)[: max_question - 2]
         q_at.append((len(seqs), len(state_ids)))
+        q_span.append((len(seqs), len(state_ids) + 2, len(state_ids) + len(head)))
         seqs.append(flat(state_ids + head))
-        at = []
+        at, sp = [], []
         for option in question.options:
             body = [tok.opt_id] + tok.encode(option)[: max_option - 1]
             at.append((len(seqs), len(state_ids) + len(head)))
+            sp.append((len(seqs), len(state_ids) + len(head) + 1, len(state_ids) + len(head) + len(body)))
             seqs.append(flat(state_ids + head + body))
         opt_at.append(at)
-    return Separate(list(questions), seqs, q_at, opt_at)
+        opt_span.append(sp)
+    return Separate(list(questions), seqs, q_at, opt_at, q_span, opt_span)
 
 
 def allowed(qgroup: Sequence[int], ogroup: Sequence[int]) -> list[list[bool]]:
