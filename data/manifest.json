@@ -183,7 +183,7 @@
    "name": "AG News",
    "kind": "choice",
    "split": "train",
-   "licence": "non-commercial research use",
+   "licence": "not stated",
    "train_states": 15000,
    "available": 119921,
    "group": "in-domain",
@@ -245,7 +245,7 @@
    "name": "Yahoo Answers",
    "kind": "choice",
    "split": "train",
-   "licence": "non-commercial research use",
+   "licence": "not stated",
    "train_states": 15000,
    "available": 699975,
    "group": "in-domain",
@@ -276,7 +276,7 @@
    "name": "MultiNLI",
    "kind": "yesno",
    "split": "train",
-   "licence": "OANC and CC BY-SA 3.0 parts",
+   "licence": "OANC, CC BY-SA 3.0 and others",
    "train_states": 30000,
    "available": 392570,
    "group": "in-domain",
@@ -331,7 +331,7 @@
    "name": "Yelp-5",
    "kind": "score",
    "split": "train",
-   "licence": "Yelp dataset terms, non-commercial",
+   "licence": "Yelp dataset agreement",
    "train_states": 15000,
    "available": 649945,
    "group": "in-domain",
@@ -361,7 +361,7 @@
   "trec": {
    "name": "TREC-6",
    "kind": "choice",
-   "licence": "research use",
+   "licence": "not stated",
    "group": "held-out",
    "eval_splits": [
     "test",
@@ -398,7 +398,7 @@
   "newsgroups": {
    "name": "20 Newsgroups",
    "kind": "choice",
-   "licence": "public domain release, research use",
+   "licence": "not stated",
    "group": "held-out",
    "eval_splits": [
     "test"
@@ -416,7 +416,7 @@
   "rte": {
    "name": "RTE",
    "kind": "yesno",
-   "licence": "GLUE terms, research use",
+   "licence": "GLUE: the source's terms",
    "group": "held-out",
    "eval_splits": [
     "test",
@@ -434,7 +434,7 @@
   "scitail": {
    "name": "SciTail",
    "kind": "yesno",
-   "licence": "Apache-2.0",
+   "licence": "not stated",
    "group": "held-out",
    "eval_splits": [
     "test"
@@ -451,7 +451,7 @@
   "mrpc": {
    "name": "MRPC",
    "kind": "yesno",
-   "licence": "Microsoft Research licence, research use",
+   "licence": "GLUE: the source's terms",
    "group": "held-out",
    "eval_splits": [
     "test",
@@ -469,7 +469,7 @@
   "sst5": {
    "name": "SST-5",
    "kind": "score",
-   "licence": "research use",
+   "licence": "not stated",
    "group": "held-out",
    "eval_splits": [
     "test"
@@ -486,7 +486,7 @@
   "stsb": {
    "name": "STS-B",
    "kind": "score",
-   "licence": "CC BY-SA 4.0 and source terms",
+   "licence": "not stated",
    "group": "held-out",
    "eval_splits": [
     "test"
@@ -503,7 +503,7 @@
   "tweet_sentiment": {
    "name": "TweetEval sentiment",
    "kind": "score",
-   "licence": "Twitter terms, research use",
+   "licence": "per subset, not stated",
    "group": "held-out",
    "eval_splits": [
     "test"

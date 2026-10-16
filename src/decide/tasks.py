@@ -337,7 +337,7 @@ class Task:
     train_cap: int = 0  # training states (0: not a training task)
     eval_cap: int = 2000  # evaluation states
     eval_splits: tuple[str, ...] = ("test",)
-    licence: str = ""
+    licence: str = ""  # as the dataset's Hub card (or, for Banking77, PolyAI's original card) states it
 
 
 def _clinc_domains() -> dict[str, list[str]]:
@@ -349,36 +349,36 @@ TASKS: dict[str, Task] = {
     "clinc": Task("CLINC150", "choice", "clinc", cast_clinc(_clinc_domains()), 15100, 2000, licence="CC BY 3.0"),
     "ag_news": Task("AG News", "choice", "ag_news", cast_topic(
         AG_LABELS, ("What is this news article about?", "Which section does this article belong in?"),
-        ("Is this article about {}?", "Is this a {} story?")), 15000, licence="non-commercial research use"),
+        ("Is this article about {}?", "Is this a {} story?")), 15000, licence="not stated"),
     "dbpedia": Task("DBpedia-14", "choice", "dbpedia", cast_topic(
         DBPEDIA_LABELS, ("What kind of thing does this text describe?", "What is the subject of this entry?"),
         ("Is this text about {}?", "Does this entry describe {}?")), 15000, licence="CC BY-SA 3.0"),
     "yahoo": Task("Yahoo Answers", "choice", "yahoo", cast_topic(
         YAHOO_LABELS, ("What is the topic of this question?", "Which category was this question asked in?"),
-        ("Is this question about {}?", "Was this asked under {}?")), 15000, licence="non-commercial research use"),
-    "mnli": Task("MultiNLI", "yesno", "mnli", cast_mnli, 30000, licence="OANC and CC BY-SA 3.0 parts"),
+        ("Is this question about {}?", "Was this asked under {}?")), 15000, licence="not stated"),
+    "mnli": Task("MultiNLI", "yesno", "mnli", cast_mnli, 30000, licence="OANC, CC BY-SA 3.0 and others"),
     "boolq": Task("BoolQ", "yesno", "boolq", cast_boolq, 9427, licence="CC BY-SA 3.0"),
-    "yelp": Task("Yelp-5", "score", "yelp", cast_yelp, 15000, licence="Yelp dataset terms, non-commercial"),
+    "yelp": Task("Yelp-5", "score", "yelp", cast_yelp, 15000, licence="Yelp dataset agreement"),
     # Held-out tasks: no training example comes from these datasets.
     "trec": Task("TREC-6", "choice", "trec", cast_menu(
         TREC_LABELS, "What kind of answer is this question asking for?", "Is this question asking for {}?"),
-        eval_splits=("test", "train"), licence="research use"),
+        eval_splits=("test", "train"), licence="not stated"),
     "banking77": Task("Banking77", "choice", "banking77", None, licence="CC BY 4.0"),  # cast set once labels are read
     "newsgroups": Task("20 Newsgroups", "choice", "newsgroups", cast_menu(
         sorted(NEWSGROUPS.values()), "Which discussion group was this posted to?", "Was this posted to a group about {}?"),
-        licence="public domain release, research use"),
+        licence="not stated"),
     "rte": Task("RTE", "yesno", "rte", cast_yesno("Based on the text, is it true that: {}"),
-                eval_splits=("test", "train"), licence="GLUE terms, research use"),
+                eval_splits=("test", "train"), licence="GLUE: the source's terms"),
     "scitail": Task("SciTail", "yesno", "scitail", cast_yesno("Does the text support this claim: {}"),
-                    licence="Apache-2.0"),
+                    licence="not stated"),
     "mrpc": Task("MRPC", "yesno", "mrpc", cast_yesno("Does it say the same thing as this sentence: {}"),
-                 eval_splits=("test", "train"), licence="Microsoft Research licence, research use"),
+                 eval_splits=("test", "train"), licence="GLUE: the source's terms"),
     "sst5": Task("SST-5", "score", "sst5", cast_score(SENTIMENT5, "How positive is this movie review?{}"),
-                 licence="research use"),
+                 licence="not stated"),
     "stsb": Task("STS-B", "score", "stsb", cast_score(SIMILARITY, "How close in meaning is it to this sentence: {}"),
-                 licence="CC BY-SA 4.0 and source terms"),
+                 licence="not stated"),
     "tweet_sentiment": Task("TweetEval sentiment", "score", "tweet_sentiment", cast_score(
-        SENTIMENT3, "What is the sentiment of this tweet?{}"), licence="Twitter terms, research use"),
+        SENTIMENT3, "What is the sentiment of this tweet?{}"), licence="per subset, not stated"),
 }
 
 TRAIN_TASKS = [k for k, t in TASKS.items() if t.train_cap]
