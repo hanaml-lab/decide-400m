@@ -1,5 +1,4 @@
 {
- "_comment": "Matched-budget reference for the layout ablations: decide-400m's tree packing on the same 30,000 training states.",
  "name": "tree-30k",
  "backbone": "answerdotai/ModernBERT-large",
  "layout": "tree",
@@ -18,12 +17,26 @@
  "weight_decay": 0.01,
  "warmup": 0.06,
  "optimizer": "adamw8bit",
+ "embedding_32bit": false,
  "checkpointing": true,
  "bf16": true,
- "standardize_states": 2000,
  "seed": 0,
+ "train_limit": 30000,
  "gpu_memory_gb": 6.2,
+ "max_steps": 0,
+ "standardize_states": 2000,
+ "restart_check_step": 500,
+ "restart_below": 0.4,
+ "max_attempts": 4,
+ "head_warmup_steps": 0,
+ "head_warmup_lr": 0.001,
+ "log_every": 50,
+ "eval_every": 500,
  "train": "data/mix/train.jsonl",
  "dev": "data/mix/dev.jsonl",
- "train_limit": 30000
+ "alphas": [
+  0.05,
+  0.1
+ ],
+ "delta": 0.1
 }

@@ -14,9 +14,9 @@ python scripts/baseline_nli.py --out results/nli-baseline
 train configs/decide-400m.json decide-400m-s1 1
 train configs/decide-400m.json decide-400m-s2 2
 train configs/ablations/noslot.json noslot 0
-train configs/ablations/tree-30k.json tree-30k 0
-train configs/ablations/flat-30k.json flat-30k 0
-train configs/ablations/separate-30k.json separate-30k 0
+train configs/ablations/tree-base-30k.json tree-base-30k 0
+train configs/ablations/flat-base-30k.json flat-base-30k 0
+train configs/ablations/separate-base-30k.json separate-base-30k 0
 python bench/latency_real.py --run runs/decide-400m-s0 --out results/latency_real.json
 python scripts/mask_example.py --out results/mask_example.json
 python scripts/analyze.py --results results --out results/summary.json

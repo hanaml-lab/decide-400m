@@ -1,8 +1,8 @@
 {
- "_comment": "Layout ablation: one ordinary pass with full attention and sequential positions, on the same 30,000 training states.",
- "name": "flat-30k",
- "backbone": "answerdotai/ModernBERT-large",
- "layout": "flat",
+ "_comment": "Layout ablation, reference: decide-400m's tree packing on ModernBERT-base and the same 30,000 training states as the other two layouts. The base encoder makes one pass per option affordable; on ModernBERT-large, a 30,000-state schedule did not leave the initial plateau (results/diagnostics/layout-tree-large-30k-attempts.jsonl).",
+ "name": "tree-base-30k",
+ "backbone": "answerdotai/ModernBERT-base",
+ "layout": "tree",
  "none_slot": true,
  "readout": "marker",
  "max_state": 512,

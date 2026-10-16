@@ -1,7 +1,7 @@
 {
- "_comment": "Layout ablation: one pass per option (and one per question), full attention, on the same 30,000 training states.",
- "name": "separate-30k",
- "backbone": "answerdotai/ModernBERT-large",
+ "_comment": "Layout ablation: one pass per option (and one per question), full attention, on ModernBERT-base and the same 30,000 training states.",
+ "name": "separate-base-30k",
+ "backbone": "answerdotai/ModernBERT-base",
  "layout": "separate",
  "none_slot": true,
  "readout": "marker",
