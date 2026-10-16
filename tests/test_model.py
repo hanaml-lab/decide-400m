@@ -73,3 +73,13 @@ def test_ask(model, tok):
 
 def test_question_kinds_are_validated():
     assert Question("yesno", "x").options == ()
+
+
+def test_ask_moves_the_request_to_the_model(model, tok):
+    import copy
+
+    if not torch.cuda.is_available():
+        return
+    gpu = copy.deepcopy(model).cuda()
+    answers = ask(gpu, tok, STATE_TEXT, [CHOICE, YN])
+    assert len(answers) == 2 and abs(sum(answers[0].probs.values()) + answers[0].none - 1) < 1e-4

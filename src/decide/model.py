@@ -255,7 +255,9 @@ def ask(model: DecisionModel, tok: Tokenizer, state: str, questions: Sequence[Qu
     answer is decided."""
     model.eval()
     packed = pack(tok, state, questions)
-    out = model(collate([packed], tok.pad_id))
+    device = next(model.parameters()).device
+    out = model(collate([packed], tok.pad_id).to(device))
+    out = Logits(out.choice.float().cpu(), out.yesno.float().cpu(), out.eta.float().cpu(), out.cuts.float().cpu(), out.where)
     temps = calibration.temperatures if calibration else {}
     probs = probabilities(out, temps)
     picks = verdicts(probs)
