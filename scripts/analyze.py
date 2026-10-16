@@ -228,6 +228,11 @@ def accuracy_table(kinds: dict[str, Kind], tasks: list[str]) -> dict:
                 sel = (kind.task == task) & (kind.tag == tag) & fits
                 if sel.any():
                     row = {"kind": k, "tag": tag, "accuracy": float(correct[sel].mean()), "questions": int(sel.sum())}
+                    # chance: a uniform pick among a choice's options; the commonest answer for yes/no and score
+                    if k == "choice":
+                        row["chance"] = float(np.mean(1.0 / kind.k[sel]))
+                    else:
+                        row["chance"] = float(np.bincount(kind.target[sel]).max() / sel.sum())
                     if k == "score":
                         row["mae_levels"] = float(np.abs(ans[sel] - kind.target[sel]).mean())
                     out["by_task"].setdefault(task, []).append(row)
@@ -248,23 +253,28 @@ def dev_temperatures(dev: dict[str, Kind]) -> dict:
 
 def calibration_table(kinds: dict[str, Kind], cal: dict[str, np.ndarray], temps: dict) -> dict:
     """ECE and NLL on the suite's test half: raw, with the dev temperatures (one per kind, or one for all), and
-    with a temperature refitted on the suite's calibration half."""
+    with temperatures refitted on the suite's calibration half (one per kind, or one for all)."""
     out = {}
+    t_suite_single = single_temperature(kinds, cal)
     for k, kind in kinds.items():
         if not kind.n:
             continue
         t_dev = temps["per_kind"].get(k, 1.0)
         t_suite = fit_t(kind, cal[k])
         test = ~cal[k]
-        row = {"temperature_dev": t_dev, "temperature_single": temps["single"], "temperature_suite": t_suite}
-        for name, temp in (("raw", 1.0), ("calibrated", t_dev), ("single", temps["single"]), ("suite", t_suite)):
+        row = {"temperature_dev": t_dev, "temperature_single": temps["single"], "temperature_suite": t_suite,
+               "temperature_suite_single": t_suite_single}
+        for name, temp in (("raw", 1.0), ("calibrated", t_dev), ("single", temps["single"]), ("suite", t_suite),
+                           ("suite_single", t_suite_single)):
             _, conf, correct = kind.decisions(temp)
             row[f"ece_{name}"] = ece(conf[test], correct[test])
             row[f"nll_{name}"] = kind.nll(temp, kind.fit_mask() & test)
         _, c1, r1 = kind.decisions(1.0)
         _, ct, rt = kind.decisions(t_dev)
+        _, cs, rs = kind.decisions(t_suite)
         row["reliability_raw"] = reliability(c1[test], r1[test])
         row["reliability_calibrated"] = reliability(ct[test], rt[test])
+        row["reliability_suite"] = reliability(cs[test], rs[test])
         out[k] = row
     return out
 
@@ -272,7 +282,10 @@ def calibration_table(kinds: dict[str, Kind], cal: dict[str, np.ndarray], temps:
 def decide_table(kinds: dict[str, Kind], temps: dict, splits: int, seed: int, alphas=ALPHAS, natural_only=False) -> dict:
     """Decide or defer over random calibration/test splits of the suite's states, at the dev temperatures."""
     rng = np.random.default_rng(seed)
-    use = {k: (kinds[k].tag == "natural") if natural_only else np.ones(kinds[k].n, bool) for k in kinds}
+    # natural_only: the natural questions the NLI baseline also answers (it does not answer BoolQ), so the two models
+    # are compared on the same questions
+    use = {k: ((kinds[k].tag == "natural") & (kinds[k].task != "boolq")) if natural_only else np.ones(kinds[k].n, bool)
+           for k in kinds}
     states = np.unique(np.concatenate([kinds[k].state[use[k]] for k in kinds if kinds[k].n]))
     acc = {a: {k: {"coverage": [], "error": [], "violations": 0, "none_decided": []} for k in KINDS} for a in alphas}
     pooled = {a: {"coverage": [], "error": [], "violations": 0} for a in alphas}
@@ -324,7 +337,8 @@ def decide_table(kinds: dict[str, Kind], temps: dict, splits: int, seed: int, al
     return out
 
 
-def shift_table(src: dict[str, Kind], dst: dict[str, Kind], temps: dict, seed: int, sizes=(50, 100, 200, 500, 1000),
+def shift_table(src: dict[str, Kind], dst: dict[str, Kind], temps: dict, seed: int,
+                sizes=(50, 100, 200, 500, 1000, 2000, 3000, 5000),
                 splits: int = 200, alphas=(0.05, 0.10)) -> dict:
     """Thresholds set on the whole in-domain suite and read on the held-out one; then thresholds set on n held-out
     questions of each kind, tested on the rest. Temperatures are the dev ones throughout."""
@@ -335,7 +349,7 @@ def shift_table(src: dict[str, Kind], dst: dict[str, Kind], temps: dict, seed: i
         t = temps["per_kind"].get(k, 1.0)
         _, conf_s, corr_s = src[k].decisions(t)
         _, conf_d, corr_d = dst[k].decisions(t)
-        for a in alphas:
+        for a in ALPHAS:  # carrying thresholds over is cheap: every level
             th = threshold(conf_s, ~corr_s, a)
             cov, err = realised(conf_d, ~corr_d, th)
             row = {"threshold": th, "coverage": cov, "error": err}
