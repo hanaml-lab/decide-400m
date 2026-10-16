@@ -1,0 +1,32 @@
+{
+ "test_in": {
+  "states_checked": 3500,
+  "option_order": {
+   "choice_questions": 2500,
+   "max_option_prob_change": 0.0035160901230820163,
+   "max_none_prob_change": 8.325878379970841e-05,
+   "answer_changed": 159,
+   "answer_changed_share": 0.0636
+  }
+ },
+ "test_out": {
+  "states_checked": 3476,
+  "option_order": {
+   "choice_questions": 1200,
+   "max_option_prob_change": 0.00018279702050608138,
+   "max_none_prob_change": 0.00012600023664205429,
+   "answer_changed": 25,
+   "answer_changed_share": 0.020833333333333332
+  }
+ },
+ "fp32_subset": {
+  "states": 500,
+  "option_order": {
+   "choice_questions": 500,
+   "max_option_prob_change": 1.5956870769162634e-08,
+   "max_none_prob_change": 1.229652143996951e-08,
+   "answer_changed": 0,
+   "answer_changed_share": 0.0
+  }
+ }
+}

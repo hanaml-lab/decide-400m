@@ -1,0 +1,29 @@
+{
+ "name": "tree-base-30k",
+ "seed": 0,
+ "steps": 938,
+ "states": 30000,
+ "train_seconds": 394.37783789634705,
+ "attempts": [
+  {
+   "attempt": 1,
+   "steps": 938,
+   "seconds": 394.3778307437897,
+   "restarted": false
+  }
+ ],
+ "all_attempts_seconds": 394.3778307437897,
+ "tokens": 3530776,
+ "parameters": 153352197,
+ "machine": {
+  "cpu": "Intel(R) Core(TM) i9-14900KF",
+  "torch": "2.12.0+cu126",
+  "python": "3.13.9",
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "cuda": "12.6",
+  "transformers": "4.57.6",
+  "bitsandbytes": "0.50.2"
+ },
+ "peak_gb": 2.379545211791992,
+ "finished": "2026-10-16T07:13:05"
+}

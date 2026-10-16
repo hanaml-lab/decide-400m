@@ -1,0 +1,44 @@
+{
+ "test_in": {
+  "states_checked": 3500,
+  "option_order": {
+   "choice_questions": 2500,
+   "max_option_prob_change": 0.01388988390530621,
+   "max_none_prob_change": 0.0,
+   "answer_changed": 3,
+   "answer_changed_share": 0.0012
+  },
+  "asked_alone": {
+   "questions": 6306,
+   "max_logit_change": NaN
+  }
+ },
+ "test_out": {
+  "states_checked": 3476,
+  "option_order": {
+   "choice_questions": 1200,
+   "max_option_prob_change": 0.01937184958089805,
+   "max_none_prob_change": 0.0,
+   "answer_changed": 4,
+   "answer_changed_share": 0.0033333333333333335
+  },
+  "asked_alone": {
+   "questions": 2400,
+   "max_logit_change": NaN
+  }
+ },
+ "fp32_subset": {
+  "states": 500,
+  "option_order": {
+   "choice_questions": 500,
+   "max_option_prob_change": 2.3855037933340206e-06,
+   "max_none_prob_change": 0.0,
+   "answer_changed": 0,
+   "answer_changed_share": 0.0
+  },
+  "asked_alone": {
+   "questions": 1000,
+   "max_logit_change": NaN
+  }
+ }
+}

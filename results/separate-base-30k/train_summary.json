@@ -1,0 +1,47 @@
+{
+ "name": "separate-base-30k",
+ "seed": 0,
+ "steps": 938,
+ "states": 30000,
+ "train_seconds": 1724.2292845249176,
+ "attempts": [
+  {
+   "attempt": 1,
+   "steps": 500,
+   "seconds": 986.095579624176,
+   "restarted": true
+  },
+  {
+   "attempt": 2,
+   "steps": 500,
+   "seconds": 1098.5934245586395,
+   "restarted": true
+  },
+  {
+   "attempt": 3,
+   "steps": 500,
+   "seconds": 1057.3694989681244,
+   "restarted": true
+  },
+  {
+   "attempt": 4,
+   "steps": 938,
+   "seconds": 1724.229276418686,
+   "restarted": false
+  }
+ ],
+ "all_attempts_seconds": 4866.287779569626,
+ "tokens": 18746429,
+ "parameters": 153352197,
+ "machine": {
+  "cpu": "Intel(R) Core(TM) i9-14900KF",
+  "torch": "2.12.0+cu126",
+  "python": "3.13.9",
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "cuda": "12.6",
+  "transformers": "4.57.6",
+  "bitsandbytes": "0.50.2"
+ },
+ "peak_gb": 2.382946014404297,
+ "finished": "2026-10-16T08:46:29"
+}
