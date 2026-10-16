@@ -1,0 +1,9 @@
+# python scripts/diagnose_features.py answerdotai/ModernBERT-large
+# ModernBERT-large, untrained heads, tree packing; AG News choice questions from the training mixture (1,200 states:
+# probe fitted on the first 700 whose answer is listed, scored on the rest). RTX 4070 Ti SUPER; 2026-10-16 02:14 PDT.
+# Printed by the script before its comments were tidied (commit 7a822b8); the computation is the same.
+wrapper vs library, max abs difference: 0.0 | output scale: 0.5090433955192566
+Q marker               mean cosine between states 0.763 | probe accuracy on held-out states 0.747
+first OPT marker       mean cosine between states 0.752 | probe accuracy on held-out states 0.732
+mean of state tokens   mean cosine between states 0.861 | probe accuracy on held-out states 0.845
+CLS                    mean cosine between states 0.804 | probe accuracy on held-out states 0.711

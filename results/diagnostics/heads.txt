@@ -1,0 +1,11 @@
+# python scripts/diagnose_heads.py answerdotai/ModernBERT-large
+# A fresh ChoiceHead trained for 400 AdamW steps (lr 1e-3, batch 32) on cached [Q] and [OPT] vectors of the frozen,
+# untrained encoder: 2,500 AG News training states, scored on 500 more. Seed 0. 2026-10-16 02:16 PDT.
+raw           step 100 train loss 1.534 held-out slot accuracy 0.310
+raw           step 200 train loss 1.557 held-out slot accuracy 0.314
+raw           step 300 train loss 1.535 held-out slot accuracy 0.280
+raw           step 400 train loss 1.546 held-out slot accuracy 0.280
+standardised  step 100 train loss 1.283 held-out slot accuracy 0.444
+standardised  step 200 train loss 1.231 held-out slot accuracy 0.412
+standardised  step 300 train loss 1.141 held-out slot accuracy 0.426
+standardised  step 400 train loss 1.217 held-out slot accuracy 0.456
