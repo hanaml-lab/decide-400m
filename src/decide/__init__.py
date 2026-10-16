@@ -7,4 +7,4 @@ from .risk import decision_threshold, state_threshold
 
 __all__ = ["Answer", "Calibration", "Choice", "DecisionModel", "Question", "Score", "YesNo", "ask",
            "decision_threshold", "ece", "fit_temperatures", "pack", "state_threshold"]
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -1,140 +1,127 @@
-# decide-400m: typed answers about a state, with a bound on the error rate of the decisions it makes
+# decide-400m: typed answers about a state in one encoder pass, calibrated, or deferred under a certified error rate
 
 [![ci](https://github.com/hanaml-lab/decide-400m/actions/workflows/ci.yml/badge.svg)](https://github.com/hanaml-lab/decide-400m/actions/workflows/ci.yml)
 
-Reference implementation of [decide-400m](https://hanaml.com/models/decide-400m), hanaML's decision model. It reads an application's state (a support ticket, a log line, an agent's step, any serialised record) and a list of typed questions about it, and answers all of them in one encoder pass, with no generated text:
+Reference implementation, training and evaluation code of [decide-400m](https://hanaml.com/models/decide-400m), hanaML's decision model, and of its technical report, [*Decide or Defer*](https://hanaml.com/research/papers/decide-400m-report). It reads an application's state (a support ticket, a log line, an agent's step, any serialised record) and a list of typed questions about it, and answers all of them in one encoder pass, with no generated text:
 
 - **choice**: a distribution over the options given, plus a *none fits* slot;
 - **yes/no**: a Bernoulli probability;
 - **score**: a distribution over the levels of an ordered scale, from a cumulative-link head.
 
-Every answer is calibrated, and every answer is either **decided** or **deferred**. A threshold set on calibration questions certifies that the error rate of the decisions made is at most the level α you choose, with probability 1 − δ over the calibration draw; answers below it go to a person or a larger model. That guarantee is the one the lab's [CCV](https://hanaml.com/research/papers/verifier-search-agents) uses to decide when a coding agent should submit, and [InForce](https://hanaml.com/research/papers/agentic-rag-citation-verification) to decide which claims an answer ships, applied here to every kind of answer.
+Every answer is calibrated, and every answer is either **decided** or **deferred**. A threshold set on labelled calibration questions certifies that the error rate of the decided answers is at most the level α you choose, with probability 1 − δ over the calibration draw (Learn then Test); the rest go to a person or a larger model. That is the guarantee the lab's [CCV](https://hanaml.com/research/papers/verifier-search-agents) uses to decide when a coding agent should submit, and [InForce](https://hanaml.com/research/papers/agentic-rag-citation-verification) to decide which claims an answer ships, applied to every kind of answer.
+
+**v0.2.0** trains the model and measures it: ModernBERT-large fine-tuned on seven public datasets cast as typed questions, three seeds on one GPU, evaluated on the test splits of the training datasets and on nine datasets held out of training. Every number below and in the report is computed by `scripts/analyze.py` from the predictions committed in `results/`, and CI recomputes it on every push. The weights are not published.
+
+## Measured results
+
+Means over three seeds (0, 1, 2); decide-or-defer over 200 random calibration/test splits of each suite, δ = 0.1. The NLI baseline is [ModernBERT-large-zeroshot-v2.0](https://huggingface.co/MoritzLaurer/ModernBERT-large-zeroshot-v2.0), one pass per option; it trained on Banking77, AG News, Yahoo Answers, Yelp and MultiNLI itself, and on the source sentences of SST-5.
+
+| | In-domain suite (7 datasets) | Held-out suite (9 datasets) |
+| --- | --- | --- |
+| Accuracy: choice / yes/no / score (%) | 89.3 / 92.9 / 75.4 | 63.9 / 76.7 / 43.9 |
+| Macro accuracy, questions both answer: decide-400m / NLI baseline (%) | 86.8 / 77.6 | 59.9 / 66.5 |
+| ECE, no temperature: choice / yes/no / score | 0.015 / 0.009 / 0.031 | 0.171 / 0.112 / 0.102 |
+| Decided at α = 0.10, thresholds set on the same suite (%) | 84.8 (error 7.6) | 12.7 (error 6.3) |
+| Decided at α = 0.05 (%) | 73.5 (error 4.0) | 0.7 (error 0.7) |
+
+What the runs show:
+
+- **In domain the rule decides most questions at a certified error rate.** Over 200 splits, no kind's test error exceeded α in more than 2% of them at any level, against the δ = 10% the guarantee allows.
+- **The bound does not travel.** Thresholds set on the in-domain suite and applied to the held-out one let through errors of 20.9% (choice), 23.3% (yes/no) and 19.3% (score) at α = 0.10. Set on labelled held-out questions, they hold, but decide little until there are thousands of labels: calibrate on your own traffic with `scripts/calibrate.py`.
+- **On new tasks the NLI baseline is more accurate.** It is ahead on every held-out dataset, by 0.8 to 13.4 points; it was trained on far more data.
+- **None fits.** The slot separates questions no option fits from the rest with AUROC 0.990 in domain and 0.726 on held-out tasks.
+- **Order cannot matter.** In fp32, shuffling every choice's options changed no answer (largest change in any probability 4.0 × 10<sup>−6</sup>).
+- **Layouts.** At a matched budget on ModernBERT-base, an ordinary flat pass was about as accurate as tree packing but changed 13.4% of choice answers when the options were reordered (tree packing: none, in fp32). One pass per option did not start in any of four attempts.
+- **Latency.** On real requests, one tree-packed pass took a median 908 ms on 8 CPU threads (fp32, beside another job) against 2,279 ms for one pass per option, 2.8 times faster per request. On an RTX 4070 Ti SUPER (bf16), one request at a time, it took 50.1 ms against 53.6 ms: there time barely depends on the tokens read. On the questions the NLI baseline can answer, 50.8 ms against its 64.5 ms.
+
+## Reproduce
+
+On one GPU with about 6 GB free (each job caps itself at 6.2 GB) and Python 3.11+:
+
+```bash
+pip install torch            # a CUDA build
+pip install -e ".[train,analysis,dev]"
+bash scripts/run_all.sh      # every reported run, in order
+```
+
+`scripts/run_all.sh` runs, in order: `prepare_data.py` (downloads the datasets at pinned Hub commits and writes the mixture and the suites, byte-identical to `data/manifest.json`'s digests); `train.py` for the three seeds and the four ablations (`configs/`); `evaluate.py` after each; `baseline_nli.py`; `bench/latency_real.py`; and `analyze.py`, which writes `results/summary.json`. One epoch took 44 minutes per seed on an RTX 4070 Ti SUPER shared with another job. The latency numbers are from a second run of `bench/latency_real.py` (default seed), made when no other compute job used the GPU (`results/diagnostics/latency_real_gpu_use.log`); the first, made while another job trained on it, is `results/diagnostics/latency_real_gpu_shared.json`. To check the numbers without a GPU:
+
+```bash
+pip install -e ".[analysis]"
+python scripts/analyze.py --results results --out /tmp/summary.json
+python scripts/check_summary.py /tmp/summary.json results/summary.json
+```
+
+## Training
+
+`src/decide/trainer.py`: one epoch of steps of 32 states, length-grouped into micro-batches of at most 8,192 padded tokens; AdamW in its 8-bit form (bitsandbytes), learning rates 3e-5 (encoder) and 1e-4 (heads), 6% warm-up then linear decay; bf16 autocast with fp32 master weights and layer recomputation; peak 5.60 GB.
+
+Two parts of the recipe come from failures, and the record of them is in `results/diagnostics/`:
+
+- **The heads read standardised vectors.** With the heads reading ModernBERT's raw marker vectors, six starts on the full mixture sat at chance for 200 to 550 steps. A linear probe reads AG News topics from the frozen `[Q]` vector 75% of the time, but a fresh choice head on the raw vectors learns nothing, because they share a large common component (mean cosine 0.763 across states); on the same vectors standardised per feature it learns (`diagnose_features.py`, `diagnose_heads.py`). Each feature is now standardised with statistics from 2,000 training states under the untrained encoder.
+- **A run that has not started by step 500 starts again.** Even with standardised inputs, leaving the initial plateau was partly chance: two starts with the same seed differed, one leaving it by step 200, the other not by step 350. The rule, fixed before any reported run: a run whose dev choice accuracy at step 500 is below 0.40 restarts with the same seed, up to four attempts. Of the reported runs, seed 0, seed 1, seed 2, the flat layout, the no-slot ablation and the tree layout on the base encoder started on the first attempt; the one-pass-per-option layout did not start in any of its four attempts.
+
+A run trained with an error in MultiNLI's three-way answers (neutral and contradiction swapped) was stopped and is not reported; its log was not kept. A layer-wise learning-rate decay of 0.9 started training but learned slowly, and that run was stopped too (`results/diagnostics/full-llrd0.9-seed0-stopped-at-1500.jsonl`).
 
 ## What is in it
 
-- **Tree packing** (`decide/packing.py`, `decide/encoders.py`). The state and every question are laid out in one sequence, but attention follows a tree: the state sees only itself, a question sees the state and itself, an option sees the state, its question and itself. All questions start at the same rotary position, and so do all options of a question. Nothing in the encoder can tell which option or question came first: permuting options permutes their scores exactly, a question's answer does not change with the other questions asked beside it, and the state is encoded once for all of them. `TreeMaskedModernBert` runs a Hugging Face ModernBERT under this mask, with its local sliding-window layers windowed by position id.
-- **Heads** (`decide/heads.py`). A set-attention layer over {none, option 1, …, option K}, with no positions, compares the options and gives the *none fits* slot a look at all of them. A Bernoulli head for yes/no. A proportional-odds head for scores whose cutpoints come from the levels' own vectors and are increasing by construction.
-- **Calibration** (`decide/calibrate.py`). One temperature per kind of answer, fitted by negative log-likelihood on held-out questions; expected calibration error.
-- **Decide or defer** (`decide/risk.py`). `decision_threshold` tests each threshold on a fixed grid with an exact binomial test of "the error rate of the decisions made exceeds α" at δ / (grid size), and takes the lowest threshold it certifies (Learn then Test with a Bonferroni family). CCV's rule bounds the same rate in expectation, up to O(n^−1/2); this one holds with probability 1 − δ and is more conservative for it. `state_threshold` gives InForce's answer-level guarantee instead: conformal risk control of the share of states with any wrong decision.
-- **Data** (`decide/data.py`). Questions as JSON Lines, several per state; `examples/data/states.jsonl` shows the format.
-- **Training** (`decide/train.py`, `scripts/train.py`, `configs/decide-400m.json`). The full run fine-tunes ModernBERT-large with the heads and writes the weights and a calibration file per error level.
-- **The CPU toy** (`decide/toy.py`, `decide/demo.py`), below.
-- **Latency** (`bench/latency.py`): measured, with random weights.
-- **The model card's numbers** (`card/make_card.py`): a seeded simulation, illustrative.
+- `src/decide/packing.py`: the tree-packed layout, plus a flat layout and one pass per option for the ablations.
+- `src/decide/encoders.py`: the tree mask; ModernBERT run under it with boolean masks, its sliding-window layers windowed by position id; a small encoder for the CPU toy.
+- `src/decide/heads.py`, `model.py`: the choice head with its *none fits* slot (optional), the yes/no and cumulative-link score heads, standardised inputs, and `ask`.
+- `src/decide/calibrate.py`, `risk.py`: per-kind temperatures, ECE, and the decide-or-defer threshold (Learn then Test, binomial tests at δ / 100 on a fixed grid).
+- `src/decide/tasks.py`, `scripts/prepare_data.py`: public datasets cast as typed questions.
+- `src/decide/trainer.py`, `scripts/train.py`, `configs/`: training on one GPU.
+- `scripts/evaluate.py`, `scripts/baseline_nli.py`, `bench/latency_real.py`: predictions, the baseline and latency.
+- `scripts/analyze.py`, `scripts/check_summary.py`: every reported number, from the predictions.
+- `scripts/calibrate.py`: temperatures and thresholds for your own labelled questions.
+- `src/decide/toy.py`, `demo.py`: the CPU toy below.
 
-## Install
-
-```bash
-pip install -e ".[dev]"        # numpy and torch; pytest and ruff
-pip install -e ".[hf]"         # + transformers, for ModernBERT
-```
-
-## Quickstart (CPU)
+## Quickstart (CPU toy)
 
 ```bash
-python -m decide.demo          # train, calibrate and evaluate the toy: about a minute and a half on a laptop CPU
-python -m decide.demo --alpha 0.05 0.10 0.20
+pip install -e ".[dev]"
+python -m decide.demo          # trains, calibrates and evaluates a tiny model on CLINC150 in about a minute and a half
 pytest -q
 ```
 
-## Toy run (real output)
-
-The toy asks typed questions about requests from CLINC150 (Larson et al., 2019). Five of its domains are in scope (banking, credit cards, travel, work, auto and commute); a fifth of the requests come from outside them, from its out-of-scope set and its other domains. Every request gets three questions, packed together and answered in one pass: a choice among eight intents (for 15% of in-scope requests, eight intents of another domain, so none fits), a yes/no ("Does the user want: …?") and a three-level score (unrelated, same area, exact need). The model is a two-layer rotary encoder trained from scratch with the three heads. Calibration and test questions are drawn from one pool and split at random, so they are exchangeable. Output of `python -m decide.demo` on a CPU (Python 3.13):
-
-```
-CLINC150 toy: 9375 training states, 1875 calibration, 2813 test; 3 questions per state, one pass each; 0.40M parameters
-
-kind      accuracy   ECE raw  ECE cal.      T
-choice       0.883     0.033     0.023   1.35
-yes/no       0.924     0.031     0.013   1.37
-score        0.708     0.016     0.015   1.25
-
-decide or defer at alpha = 0.05, delta = 0.10 (thresholds set on calibration, read on test)
-kind     threshold  decided  error among decided
-choice       0.885    45.5%                 2.2%
-yes/no       0.905    78.4%                 2.6%
-score        0.970    15.8%                 2.5%
-choice questions no option fits (32% of test): 1.2% decided; options-only softmax, same rule: 1.4% decided, 42.7% coverage, 2.0% error
-
-decide or defer at alpha = 0.10, delta = 0.10 (thresholds set on calibration, read on test)
-kind     threshold  decided  error among decided
-choice       0.590    58.3%                 6.8%
-yes/no       0.500   100.0%                 7.6%
-score        0.690    41.5%                 6.9%
-choice questions no option fits (32% of test): 4.5% decided; options-only softmax, same rule: 7.5% decided, 55.4% coverage, 6.6% error
-
-options-only softmax that always answers: decides 100%, error 38.5%, and answers every one of the 898 questions no option fits
-options shuffled on every test choice: largest change in any probability 6.8e-06
-(74 s on CPU, torch 2.12.0+cu126, 4 threads)
-```
-
-What it shows:
-
-- **Calibration.** One temperature per kind lowers ECE on every kind (0.033 to 0.023 for choices, 0.031 to 0.013 for yes/no), without changing an answer.
-- **The bound holds, conservatively.** At every level and for every kind, the error rate of the decisions made on test questions is below α: 2.2–2.6% at α = 0.05, 6.8–7.6% at α = 0.10. The binomial test certifies with probability 0.9, so it leaves room.
-- **It defers where it should.** Of the choice questions no option fits, it decides 1.2% at α = 0.05. A softmax over the options that always answers decides all of them, and is wrong on 38.5% of all choice questions.
-- **Scores are the hardest to certify.** At α = 0.05 it decides only 15.8% of scores.
-- **The none-fits slot helps modestly.** Read as a softmax over the options alone, the same model under the same rule decides fewer questions (42.7% against 45.5% at α = 0.05) and more of those no option fits at α = 0.10 (7.5% against 4.5%). Most of the work is done by the threshold. A model trained without the slot is not compared here.
-- **Order cannot matter.** With every test choice's options shuffled, no probability moves by more than float rounding (6.8e-06).
-
-The toy checks that the method works end to end on a problem with known answers. It does not reproduce the model card's evaluation, which is illustrative. `card/toy_run.md` records the environment.
+The toy and its real output are unchanged from v0.1.0: `card/toy_run.md`.
 
 ## Asking questions
 
 ```python
+import torch
 from decide import Calibration, Choice, Score, YesNo, ask
+from decide.tokenizer import HFTokenizer
+from decide.trainer import RunConfig, build_model
 
-answers = ask(model, tokenizer, state, [
+cfg = RunConfig.load("runs/decide-400m-s0/config.json")
+tok = HFTokenizer(cfg.backbone)
+model = build_model(cfg, len(tok), "cuda")
+model.load_state_dict(torch.load("runs/decide-400m-s0/model.pt"))
+# python scripts/calibrate.py --run runs/decide-400m-s0 --questions mine.jsonl --alpha 0.10 --out calibration.json
+calibration = Calibration.load("calibration.json")
+
+answers = ask(model, tok, open("ticket.txt").read(), [
     Choice("Which team should take this ticket?", ["Billing", "Technical support", "Shipping"]),
     YesNo("Is the customer asking for money back?"),
     Score("How urgent is it?", ["whenever", "this week", "today", "right now"]),
-], Calibration.load("calibration-alpha0.10.json"))
+], calibration)
 for answer in answers:
     print(answer)      # decided or deferred, the answer, its probability
-```
-
-`answer.probs` holds the calibrated distribution, `answer.none` a choice's mass on *none fits*, and `answer.decided` whether the answer cleared its kind's threshold.
-
-## Latency (measured)
-
-`bench/latency.py` times the architecture with random weights: the time of a forward pass does not depend on the values of the weights, and the trained ones are not published. One request is a 512-token state with four questions (two choices of eight options, a yes/no and a five-level score), 673 tokens tree-packed. The comparison reads the same request the way a zero-shot NLI classifier does, once per (state, question and option) pair: 22 sequences, 11,638 tokens, batched. Medians, from `card/latency.json`:
-
-| Device | decide-400m, one pass | One pass per option |
-|---|---|---|
-| NVIDIA RTX 4070 Ti SUPER, bf16 | 22.6 ms | 164.8 ms |
-| Intel Core i9-14900KF, 8 threads, fp32 | 5.4 s | 53.1 s |
-
-The CPU row was measured on a machine shared with other jobs, so its absolute times are slow; the ratio is the point. The architecture has 401.9M parameters: 394.8M in ModernBERT-large with the five marker tokens, 7.1M in the heads.
-
-## The model card's numbers (illustrative)
-
-decide-400m's weights are not published and its full evaluation has not been run. The accuracy, calibration and decision rows of its card come from `card/make_card.py`, a seeded simulation whose parameters are set from public zero-shot results on the same datasets; it runs the card's real procedures (temperature scaling, ECE, the decide-or-defer test) on simulated scores. The held-out suite is built from Banking77, CLINC150, LEDGAR, TREC, AG News, BoolQ, ANLI, FEVER, SST-5, Yelp-5 and STS-B. On every push, CI reruns the simulation and checks its output against `card/results.sha256`.
-
-## Layout
-
-```
-src/decide/   packing.py  encoders.py  heads.py  model.py  calibrate.py  risk.py  data.py  tokenizer.py  train.py  toy.py  demo.py
-configs/      toy.json  decide-400m.json
-data/         clinc150.json.gz (CLINC150, Larson et al., 2019)
-examples/     data/states.jsonl
-scripts/      train.py  run_toy.py
-bench/        latency.py
-card/         make_card.py  check_results.py  results.json  results.sha256  latency.json  toy_run.md
-tests/        pytest suite, including the tree mask on a small random ModernBERT
 ```
 
 ## Citation
 
 ```bibtex
-@misc{hanaml2026decide400m,
-  title        = {decide-400m: Answering typed questions about a state in one pass, or deferring to a person},
-  author       = {{hanaML}},
-  year         = {2026},
-  howpublished = {Model card},
-  url          = {https://hanaml.com/models/decide-400m}
+@techreport{agarwal2026decide,
+  title       = {Decide or Defer: Typed Questions about Application State in One Encoder Pass, with a Certified Error Rate on the Decisions Made},
+  author      = {Agarwal, Manav},
+  institution = {hanaML},
+  year        = {2026},
+  url         = {https://hanaml.com/research/papers/decide-400m-report}
 }
 ```
 
 ## License
 
-Apache-2.0. See `LICENSE`.
+Apache-2.0. See `LICENSE`. The datasets keep their own terms (`data/manifest.json` records what each Hub card states); two state none and Yelp's has its own agreement, which is one reason the weights are not published.

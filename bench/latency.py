@@ -7,7 +7,7 @@ does: one pass over (state, question + option) per option, 22 sequences of the s
 
     python bench/latency.py --device cpu --threads 8
     python bench/latency.py --device cuda
-    python bench/latency.py --write card/latency.json    # both, recorded with the machine's description
+    python bench/latency.py --write results/latency_synthetic.json    # both, with the machine's description
 """
 from __future__ import annotations
 

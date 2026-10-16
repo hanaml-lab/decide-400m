@@ -1,8 +1,8 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite the model card below."
+message: "If you use this software, please cite the technical report below."
 title: "decide: the reference implementation of decide-400m, a calibrated decision model that can defer"
-version: 0.1.0
-date-released: 2026-10-15
+version: 0.2.0
+date-released: 2026-10-16
 license: Apache-2.0
 repository-code: "https://github.com/hanaml-lab/decide-400m"
 authors:
@@ -10,12 +10,13 @@ authors:
     given-names: Manav
     affiliation: hanaML
 preferred-citation:
-  type: generic
-  title: "decide-400m: typed answers about a state in one encoder pass, with a bound on the error rate of the decisions it makes"
+  type: report
+  title: "Decide or Defer: Typed Questions about Application State in One Encoder Pass, with a Certified Error Rate on the Decisions Made"
   authors:
     - family-names: Agarwal
       given-names: Manav
   institution:
     name: hanaML
   year: 2026
-  url: "https://hanaml.com/models/decide-400m"
+  month: 10
+  url: "https://hanaml.com/research/papers/decide-400m-report"
