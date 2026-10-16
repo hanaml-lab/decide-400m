@@ -1,0 +1,7 @@
+{"event": "start", "machine": {"cpu": "Intel(R) Core(TM) i9-14900KF", "torch": "2.12.0+cu126", "python": "3.13.9", "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER", "cuda": "12.6", "transformers": "4.57.6", "bitsandbytes": "0.50.2"}, "parameters": 401875461, "steps": 3579, "states": 114527, "time": "2026-10-16T02:10:43"}
+{"event": "head_warmup", "step": 50, "of": 300, "loss": {"choice": 1.7669280439922004, "yesno": 0.710558771382055, "score": 1.546478539857329}, "elapsed_s": 21.98209857940674}
+{"event": "head_warmup", "step": 100, "of": 300, "loss": {"choice": 1.7382434907413664, "yesno": 0.6737025777242848, "score": 1.3643661794343827}, "elapsed_s": 43.60805916786194}
+{"event": "head_warmup", "step": 150, "of": 300, "loss": {"choice": 1.7283877948552298, "yesno": 0.6859624113617531, "score": 1.3875737283911025}, "elapsed_s": 62.78115510940552}
+{"event": "head_warmup", "step": 200, "of": 300, "loss": {"choice": 1.7228092484481703, "yesno": 0.6828503560077772, "score": 1.3484786365919068}, "elapsed_s": 81.43906664848328}
+{"event": "head_warmup", "step": 250, "of": 300, "loss": {"choice": 1.7698067762912848, "yesno": 0.6883168293926638, "score": 1.3347923543469968}, "elapsed_s": 98.93471622467041}
+{"event": "head_warmup", "step": 300, "of": 300, "loss": {"choice": 1.771507021550807, "yesno": 0.6710687170114218, "score": 1.3440328873693943}, "elapsed_s": 116.7357485294342}

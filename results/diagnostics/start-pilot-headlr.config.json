@@ -1,0 +1,32 @@
+{
+ "name": "pilot-headlr",
+ "backbone": "answerdotai/ModernBERT-large",
+ "layout": "tree",
+ "none_slot": true,
+ "max_state": 512,
+ "max_question": 64,
+ "max_option": 32,
+ "epochs": 1.0,
+ "batch_size": 32,
+ "token_budget": 6144,
+ "lr": 3e-05,
+ "head_lr": 0.0005,
+ "weight_decay": 0.01,
+ "warmup": 0.06,
+ "optimizer": "adamw8bit",
+ "checkpointing": true,
+ "bf16": true,
+ "seed": 0,
+ "train_limit": 0,
+ "gpu_memory_gb": 6.2,
+ "max_steps": 300,
+ "log_every": 50,
+ "eval_every": 500,
+ "train": "data/mix/train.jsonl",
+ "dev": "data/mix/dev.jsonl",
+ "alphas": [
+  0.05,
+  0.1
+ ],
+ "delta": 0.1
+}

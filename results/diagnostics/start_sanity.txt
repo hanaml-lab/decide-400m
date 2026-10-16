@@ -1,0 +1,42 @@
+# python scripts/diagnose_start.py <layout> <readout> <encoder lr> <optimizer> [backbone]
+# AG News choice questions only (4,000 training states), batch 16, 150 steps, seed 0, head lr 1e-4, 20-step warm-up.
+# Printed: mean training loss over each 25 steps. Chance (uniform over 5 slots) is 1.61.
+# RTX 4070 Ti SUPER, shared; 2026-10-16 01:41-01:59 PDT. Lines are as printed. The first twelve came from the
+# script's first version, which printed no model or optimizer: they are ModernBERT-large with AdamW8bit.
+tree marker 3e-05 step 25 loss 1.57 18s
+tree marker 3e-05 step 50 loss 1.571 33s
+tree marker 3e-05 step 75 loss 1.557 54s
+tree marker 3e-05 step 100 loss 1.565 78s
+tree marker 3e-05 step 125 loss 1.52 102s
+tree marker 3e-05 step 150 loss 1.479 125s
+flat marker 3e-05 step 25 loss 1.576 23s
+flat marker 3e-05 step 50 loss 1.568 45s
+flat marker 3e-05 step 75 loss 1.574 68s
+flat marker 3e-05 step 100 loss 1.566 92s
+flat marker 3e-05 step 125 loss 1.535 115s
+flat marker 3e-05 step 150 loss 1.481 136s
+# large tree marker 3e-05 adamw (32-bit, embeddings frozen): torch.OutOfMemoryError under the 6.6 GB cap, twice
+base tree marker 3e-05 adamw8bit step 25 loss 1.518 17s
+base tree marker 3e-05 adamw8bit step 50 loss 1.352 30s
+base tree marker 3e-05 adamw8bit step 75 loss 1.068 49s
+base tree marker 3e-05 adamw8bit step 100 loss 0.919 64s
+base tree marker 3e-05 adamw8bit step 125 loss 0.784 79s
+base tree marker 3e-05 adamw8bit step 150 loss 0.752 93s
+base tree marker 3e-05 adamw step 25 loss 1.528 17s
+base tree marker 3e-05 adamw step 50 loss 1.203 37s
+base tree marker 3e-05 adamw step 75 loss 1.134 48s
+base tree marker 3e-05 adamw step 100 loss 0.926 67s
+base tree marker 3e-05 adamw step 125 loss 0.755 79s
+base tree marker 3e-05 adamw step 150 loss 0.623 95s
+large tree marker 1e-05 adamw8bit step 25 loss 1.56 18s
+large tree marker 1e-05 adamw8bit step 50 loss 1.569 41s
+large tree marker 1e-05 adamw8bit step 75 loss 1.571 60s
+large tree marker 1e-05 adamw8bit step 100 loss 1.563 75s
+large tree marker 1e-05 adamw8bit step 125 loss 1.56 89s
+large tree marker 1e-05 adamw8bit step 150 loss 1.546 110s
+large tree marker 5e-06 adamw8bit step 25 loss 1.561 23s
+large tree marker 5e-06 adamw8bit step 50 loss 1.531 43s
+large tree marker 5e-06 adamw8bit step 75 loss 1.417 66s
+large tree marker 5e-06 adamw8bit step 100 loss 1.207 83s
+large tree marker 5e-06 adamw8bit step 125 loss 0.915 96s
+large tree marker 5e-06 adamw8bit step 150 loss 0.726 117s
