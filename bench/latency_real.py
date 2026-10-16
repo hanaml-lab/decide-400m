@@ -73,6 +73,16 @@ def measure(device: str, run: Path, requests, threads: int) -> dict:
     model.load_state_dict(torch.load(run / "model.pt", map_location="cpu"))
     dtype = torch.bfloat16 if device == "cuda" else torch.float32
     model = model.to(device=device, dtype=dtype).eval()
+    memory = {}
+    if device == "cuda":  # decide-400m alone on the GPU: its weights, then its peak over every request once
+        torch.cuda.synchronize()
+        memory["weights_gb"] = torch.cuda.memory_allocated() / 2**30
+        torch.cuda.reset_peak_memory_stats()
+        with torch.inference_mode():
+            for _, r in requests:
+                model(collate([pack(tok, r.state, r.questions, max_state=cfg.max_state)], tok.pad_id).to(device))
+        torch.cuda.synchronize()
+        memory["peak_gb_one_request"] = torch.cuda.max_memory_allocated() / 2**30
     ntok = AutoTokenizer.from_pretrained(NLI, revision=NLI_REVISION)
     nli = AutoModelForSequenceClassification.from_pretrained(NLI, revision=NLI_REVISION, attn_implementation="sdpa",
                                                              torch_dtype=dtype).to(device).eval()
@@ -108,7 +118,7 @@ def measure(device: str, run: Path, requests, threads: int) -> dict:
     multi = lambda x: x["questions"] >= 2  # noqa: E731
     summary["multi_question"] = {k: stats(k, multi) for k in ("tree_ms", "per_option_ms", "nli_ms")}
     return {"device": device, "dtype": str(dtype).replace("torch.", ""), "threads": threads if device == "cpu" else None,
-            "summary": summary, "requests": rows}
+            "memory": memory, "summary": summary, "requests": rows}
 
 
 def main(argv=None):

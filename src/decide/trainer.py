@@ -63,6 +63,9 @@ class RunConfig:
     gpu_memory_gb: float = 6.2
     max_steps: int = 0  # 0: the whole schedule; n: stop after n steps (smoke tests)
     standardize_states: int = 2000  # states whose [Q] and [OPT] vectors fix the heads' input standardisation
+    restart_check_step: int = 500  # a run whose dev choice accuracy here is below restart_below starts again
+    restart_below: float = 0.40
+    max_attempts: int = 4
     head_warmup_steps: int = 0  # LP-FT: train the heads alone on the frozen encoder for this many steps first
     head_warmup_lr: float = 1e-3
     log_every: int = 50
@@ -416,77 +419,100 @@ def train(cfg: RunConfig, out: Path, log: Callable[[str], None] = print) -> dict
     dev_items = [pack_record(tok, r, cfg) for r in dev]
     log(f"{len(records)} training states, {sum(len(r.questions) for r in records)} questions; packed in "
         f"{time.time() - t0:.0f} s")
-    model = build_model(cfg, len(tok), device)
-    params = sum(p.numel() for p in model.parameters())
-    opt = optimizer_for(model, cfg)
-    epochs = max(1, math.ceil(cfg.epochs))
-    plan = [steps_of(items, cfg, rng) for _ in range(epochs)]
-    total = int(round(len(plan[0]) * cfg.epochs))
-    plan = [s for epoch in plan for s in epoch][:total]
-    if cfg.max_steps:
-        plan = plan[: cfg.max_steps]
-    warm = max(1, int(cfg.warmup * total))
-    sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min((s + 1) / warm, max(0.0, (total - s) / (total - warm))))
     logf = open(out / "log.jsonl", "w")
 
     def record(row: dict) -> None:
         logf.write(json.dumps(row) + "\n")
         logf.flush()
 
-    record({"event": "start", "machine": machine(), "parameters": params, "steps": total, "states": len(records),
-            "time": time.strftime("%Y-%m-%dT%H:%M:%S")})
-    run = {"loss": {}, "n": {}, "tokens": 0, "padded": 0, "states": 0}
-    tick, train_start, tokens_total = time.time(), time.time(), 0
-    if cfg.standardize_states:
-        fit_standardization(model, items, cfg, device, tok.pad_id, random.Random(cfg.seed + 7))
-        record({"event": "standardize", "states": cfg.standardize_states,
-                "mean_abs_mean": float(model.feature_mean.abs().mean()), "mean_std": float(model.feature_std.mean())})
-    if cfg.head_warmup_steps:
-        warm_heads(model, items, records, cfg, device, tok.pad_id, rng, record, log)
-    last = len(plan)
-    for step, micro in enumerate(plan, 1):
-        model.train()
-        nq = sum(len(records[i].questions) for g in micro for i in g)
-        for group in micro:
-            batch = make_batch(items, group, tok.pad_id).to(device)
-            with autocast(cfg, device):
-                logits = model(batch)
-            terms = loss_terms(logits, targets_for(records, group, logits.where, device))
-            value = torch.stack([v for v, _ in terms.values()]).sum() / nq
-            value.backward()
-            for k, (v, n) in terms.items():
-                run["loss"][k] = run["loss"].get(k, 0.0) + v.item()
-                run["n"][k] = run["n"].get(k, 0) + n
-            run["tokens"] += int((batch.qgroup != -2).sum())
-            run["padded"] += batch.ids.numel()
-            run["states"] += len(group)
-        grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0))
-        run["grad"] = run.get("grad", 0.0) + grad_norm
-        run["steps"] = run.get("steps", 0) + 1
-        opt.step()
-        sched.step()
-        opt.zero_grad(set_to_none=True)
-        if step % cfg.log_every == 0 or step == last:
-            dt = time.time() - tick
-            tokens_total += run["tokens"]
-            row = {"event": "train", "step": step, "of": total, "lr": sched.get_last_lr()[0],
-                   "loss": {k: run["loss"][k] / run["n"][k] for k in run["loss"]},
-                   "tokens_per_s": run["tokens"] / dt, "states_per_s": run["states"] / dt,
-                   "padding": 1 - run["tokens"] / max(run["padded"], 1), "elapsed_s": time.time() - train_start,
-                   "grad_norm": run["grad"] / max(run["steps"], 1),
-                   "peak_gb": torch.cuda.max_memory_allocated() / 2**30 if device == "cuda" else 0.0}
-            record(row)
-            log(f"step {step}/{total} " + " ".join(f"{k} {v:.3f}" for k, v in row["loss"].items())
-                + f" | grad {row['grad_norm']:.2f} | {row['tokens_per_s']:.0f} tok/s, peak {row['peak_gb']:.2f} GB, {row['elapsed_s'] / 60:.1f} min")
-            run = {"loss": {}, "n": {}, "tokens": 0, "padded": 0, "states": 0}
-            tick = time.time()
-        if step % cfg.eval_every == 0 or step == last:
-            metrics = dev_metrics(predict(model, dev_items, dev, cfg, device, tok.pad_id))
-            record({"event": "dev", "step": step, **metrics})
-            log(f"dev @ {step}: " + " ".join(f"{k} loss {m['loss']:.3f} acc {m['accuracy']:.3f}" for k, m in metrics.items()))
+    attempts = []
+    for attempt in range(1, cfg.max_attempts + 1):
+        # Every attempt uses the same seed: the same initialisation and data order. Attempts differ only by the
+        # GPU's non-deterministic kernels, which is enough for the start to differ (README, "Training").
+        torch.manual_seed(cfg.seed)
+        rng = random.Random(cfg.seed)
+        model = build_model(cfg, len(tok), device)
+        params = sum(p.numel() for p in model.parameters())
+        opt = optimizer_for(model, cfg)
+        epochs = max(1, math.ceil(cfg.epochs))
+        plan = [steps_of(items, cfg, rng) for _ in range(epochs)]
+        total = int(round(len(plan[0]) * cfg.epochs))
+        plan = [s for epoch in plan for s in epoch][:total]
+        if cfg.max_steps:
+            plan = plan[: cfg.max_steps]
+        warm = max(1, int(cfg.warmup * total))
+        sched = torch.optim.lr_scheduler.LambdaLR(opt, lambda s: min((s + 1) / warm, max(0.0, (total - s) / (total - warm))))
+        record({"event": "start", "attempt": attempt, "machine": machine(), "parameters": params, "steps": total,
+                "states": len(records), "time": time.strftime("%Y-%m-%dT%H:%M:%S")})
+        run = {"loss": {}, "n": {}, "tokens": 0, "padded": 0, "states": 0}
+        tick, train_start, tokens_total = time.time(), time.time(), 0
+        if cfg.standardize_states:
+            fit_standardization(model, items, cfg, device, tok.pad_id, random.Random(cfg.seed + 7))
+            record({"event": "standardize", "attempt": attempt, "states": cfg.standardize_states,
+                    "mean_abs_mean": float(model.feature_mean.abs().mean()), "mean_std": float(model.feature_std.mean())})
+        if cfg.head_warmup_steps:
+            warm_heads(model, items, records, cfg, device, tok.pad_id, rng, record, log)
+        last = len(plan)
+        restarted = False
+        for step, micro in enumerate(plan, 1):
+            model.train()
+            nq = sum(len(records[i].questions) for g in micro for i in g)
+            for group in micro:
+                batch = make_batch(items, group, tok.pad_id).to(device)
+                with autocast(cfg, device):
+                    logits = model(batch)
+                terms = loss_terms(logits, targets_for(records, group, logits.where, device))
+                value = torch.stack([v for v, _ in terms.values()]).sum() / nq
+                value.backward()
+                for k, (v, n) in terms.items():
+                    run["loss"][k] = run["loss"].get(k, 0.0) + v.item()
+                    run["n"][k] = run["n"].get(k, 0) + n
+                run["tokens"] += int((batch.qgroup != -2).sum())
+                run["padded"] += batch.ids.numel()
+                run["states"] += len(group)
+            grad_norm = float(torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0))
+            run["grad"] = run.get("grad", 0.0) + grad_norm
+            run["steps"] = run.get("steps", 0) + 1
+            opt.step()
+            sched.step()
+            opt.zero_grad(set_to_none=True)
+            if step % cfg.log_every == 0 or step == last:
+                dt = time.time() - tick
+                tokens_total += run["tokens"]
+                row = {"event": "train", "attempt": attempt, "step": step, "of": total, "lr": sched.get_last_lr()[0],
+                       "loss": {k: run["loss"][k] / run["n"][k] for k in run["loss"]},
+                       "tokens_per_s": run["tokens"] / dt, "states_per_s": run["states"] / dt,
+                       "padding": 1 - run["tokens"] / max(run["padded"], 1), "elapsed_s": time.time() - train_start,
+                       "grad_norm": run["grad"] / max(run["steps"], 1),
+                       "peak_gb": torch.cuda.max_memory_allocated() / 2**30 if device == "cuda" else 0.0}
+                record(row)
+                log(f"step {step}/{total} " + " ".join(f"{k} {v:.3f}" for k, v in row["loss"].items())
+                    + f" | grad {row['grad_norm']:.2f} | {row['tokens_per_s']:.0f} tok/s, peak {row['peak_gb']:.2f} GB, {row['elapsed_s'] / 60:.1f} min")
+                run = {"loss": {}, "n": {}, "tokens": 0, "padded": 0, "states": 0}
+                tick = time.time()
+            if step % cfg.eval_every == 0 or step == last:
+                metrics = dev_metrics(predict(model, dev_items, dev, cfg, device, tok.pad_id))
+                record({"event": "dev", "attempt": attempt, "step": step, **metrics})
+                log(f"dev @ {step}: " + " ".join(f"{k} loss {m['loss']:.3f} acc {m['accuracy']:.3f}" for k, m in metrics.items()))
+                failed = (step == cfg.restart_check_step and "choice" in metrics
+                          and metrics["choice"]["accuracy"] < cfg.restart_below)
+                if failed and attempt < cfg.max_attempts:
+                    record({"event": "restart", "attempt": attempt, "step": step,
+                            "dev_choice_accuracy": metrics["choice"]["accuracy"], "elapsed_s": time.time() - train_start})
+                    log(f"attempt {attempt} has not started (dev choice accuracy {metrics['choice']['accuracy']:.3f} "
+                        f"< {cfg.restart_below}): restarting")
+                    restarted = True
+                    break
+        attempts.append({"attempt": attempt, "steps": step, "seconds": time.time() - train_start, "restarted": restarted})
+        if not restarted:
+            break
+        model = opt = sched = None  # free the failed attempt before the next one builds its own
+        if device == "cuda":
+            torch.cuda.empty_cache()
     train_s = time.time() - train_start
     torch.save(model.state_dict(), out / "model.pt")
     summary = {"name": cfg.name, "seed": cfg.seed, "steps": last, "states": len(records), "train_seconds": train_s,
+               "attempts": attempts, "all_attempts_seconds": sum(a["seconds"] for a in attempts),
                "tokens": tokens_total, "parameters": params, "machine": machine(),
                "peak_gb": torch.cuda.max_memory_allocated() / 2**30 if device == "cuda" else 0.0,
                "finished": time.strftime("%Y-%m-%dT%H:%M:%S")}
