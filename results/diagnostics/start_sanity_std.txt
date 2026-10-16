@@ -1,0 +1,8 @@
+# python scripts/diagnose_start.py tree marker 3e-5 adamw8bit answerdotai/ModernBERT-large std
+# As start_sanity.txt, with the heads' inputs standardised first. 2026-10-16 03:07-03:10 PDT. Lines as printed.
+large tree marker 3e-05 adamw8bit std step 25 loss 1.543 19s
+large tree marker 3e-05 adamw8bit std step 50 loss 1.127 38s
+large tree marker 3e-05 adamw8bit std step 75 loss 0.735 56s
+large tree marker 3e-05 adamw8bit std step 100 loss 0.737 76s
+large tree marker 3e-05 adamw8bit std step 125 loss 0.577 94s
+large tree marker 3e-05 adamw8bit std step 150 loss 0.534 114s

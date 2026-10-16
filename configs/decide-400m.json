@@ -1,5 +1,5 @@
 {
- "_comment": "decide-400m's training run (scripts/train.py): one epoch over the mixture of scripts/prepare_data.py on one GPU within about 6 GB. Heads read standardised marker vectors; encoder layers train at 3e-5 at the top, decaying by 0.9 per layer (README, \"Training\").",
+ "_comment": "decide-400m's training run (scripts/train.py): one epoch over the mixture of scripts/prepare_data.py on one GPU within about 6 GB. The heads read marker vectors standardised per feature (README, \"Training\").",
  "name": "decide-400m",
  "backbone": "answerdotai/ModernBERT-large",
  "layout": "tree",
@@ -13,7 +13,7 @@
  "token_budget": 8192,
  "batching": "by_length",
  "lr": 3e-05,
- "layer_decay": 0.9,
+ "layer_decay": 1.0,
  "head_lr": 0.0001,
  "weight_decay": 0.01,
  "warmup": 0.06,

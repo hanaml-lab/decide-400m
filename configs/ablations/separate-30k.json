@@ -13,7 +13,7 @@
  "token_budget": 8192,
  "batching": "by_length",
  "lr": 3e-05,
- "layer_decay": 0.9,
+ "layer_decay": 1.0,
  "head_lr": 0.0001,
  "weight_decay": 0.01,
  "warmup": 0.06,

@@ -1,14 +1,16 @@
 """Diagnostic: does one easy task (AG News choice questions) start to train, by layout, encoder learning rate,
 optimizer and backbone? Output of the reported runs: results/diagnostics/start_sanity.txt (README, "Training").
 
-    python scripts/diagnose_start.py tree marker 3e-5 adamw8bit answerdotai/ModernBERT-large
+    python scripts/diagnose_start.py tree marker 3e-5 adamw8bit answerdotai/ModernBERT-large [std]
+
+With "std" last, the heads' inputs are standardised first, as in training (trainer.fit_standardization).
 """
 import random
 import sys
 import time
 
 import torch
-from decide.trainer import RunConfig, CachedTokenizer, pack_record, make_batch, targets_for, build_model, texts_of, optimizer_for
+from decide.trainer import RunConfig, CachedTokenizer, pack_record, make_batch, targets_for, build_model, texts_of, optimizer_for, fit_standardization
 from decide.data import read, Record
 from decide.model import loss_terms
 from decide.tokenizer import HFTokenizer
@@ -25,6 +27,9 @@ torch.cuda.set_per_process_memory_fraction(6.6 * 2**30 / total)
 model = build_model(cfg, len(tok), "cuda")
 if optname == "adamw":
     model.encoder.model.embeddings.tok_embeddings.weight.requires_grad_(False)
+std = len(sys.argv) > 6 and sys.argv[6] == "std"
+if std:
+    fit_standardization(model, items, cfg, "cuda", tok.pad_id, random.Random(7))
 opt = optimizer_for(model, cfg)
 rng = random.Random(0)
 order = list(range(len(items))); rng.shuffle(order)
@@ -44,4 +49,4 @@ for step in range(150):
     opt.step()
     run.append(loss.item())
     if (step + 1) % 25 == 0:
-        print(backbone.split("-")[-1], layout, readout, lr, optname, "step", step + 1, "loss", round(sum(run[-25:]) / 25, 3), f"{time.time() - t0:.0f}s", flush=True)
+        print(backbone.split("-")[-1], layout, readout, lr, optname, "std" if std else "raw", "step", step + 1, "loss", round(sum(run[-25:]) / 25, 3), f"{time.time() - t0:.0f}s", flush=True)
