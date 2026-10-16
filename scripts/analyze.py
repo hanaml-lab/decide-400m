@@ -214,6 +214,8 @@ def accuracy_table(kinds: dict[str, Kind], tasks: list[str]) -> dict:
             if np.isfinite(kind.z[:, 0]).any() and (~fits).any():
                 p_none = kind.probs(1.0)[:, 0]
                 out["by_kind"][k]["none_fits_auroc"] = auroc(p_none, ~fits)
+                # how much probability the slot takes from questions that do have a right option
+                out["by_kind"][k]["none_mass_on_fitting"] = float(p_none[fits].mean())
             elif (~fits).any():
                 out["by_kind"][k]["none_fits_auroc"] = auroc(-conf, ~fits)
         if k == "score":
